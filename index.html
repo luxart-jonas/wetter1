@@ -100,11 +100,11 @@
   .example-tag { display: block; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 0.3rem; }
 
   .toolpanel {
-    align-self: flex-start; max-width: 88%; border: 1px solid var(--border); border-radius: 10px;
+    align-self: flex-start; max-width: 88%; border: 1px solid var(--accent); border-radius: 10px;
     background: var(--surface-2); overflow: hidden;
   }
   .toolpanel summary {
-    cursor: pointer; padding: 0.45rem 0.75rem; font-size: 0.76rem; color: var(--muted);
+    cursor: pointer; padding: 0.45rem 0.75rem; font-size: 0.78rem; color: var(--accent); font-weight: 600;
     display: flex; align-items: center; gap: 0.4rem;
   }
   .toolpanel summary::-webkit-details-marker { display: none; }
@@ -192,7 +192,7 @@
    nach einem Deploy auf einen Blick sieht, ob das Handy schon die
    neue Version geladen hat.
    ============================================================ */
-const APP_VERSION = "1.2.1";
+const APP_VERSION = "1.3.0";
 
 /* ============================================================
    KONFIGURATION — 1:1 aus der ursprünglichen Weather Engine
@@ -805,14 +805,19 @@ function renderMessage(role, text, opts = {}) {
 }
 
 function renderToolPanel(toolCalls) {
-  if (!toolCalls || toolCalls.length === 0) return;
   const details = document.createElement("details");
   details.className = "toolpanel";
+  details.open = true; // sofort sichtbar, nicht erst nach Aufklappen
   const summary = document.createElement("summary");
-  summary.textContent = `${toolCalls.length} Werkzeugaufruf${toolCalls.length > 1 ? "e" : ""} (Nerd-Modus)`;
+  const count = toolCalls ? toolCalls.length : 0;
+  summary.textContent = count > 0
+    ? `🔧 ${count} Werkzeugaufruf${count > 1 ? "e" : ""} (Nerd-Modus)`
+    : `🔧 Keine Werkzeugaufrufe (Nerd-Modus)`;
   const pre = document.createElement("pre");
   pre.className = "mono";
-  pre.textContent = toolCalls.map((c) => `▸ ${c.name}(${c.arguments})\n${JSON.stringify(c.result, null, 2)}`).join("\n\n");
+  pre.textContent = count > 0
+    ? toolCalls.map((c) => `▸ ${c.name}(${c.arguments})\n${JSON.stringify(c.result, null, 2)}`).join("\n\n")
+    : "Für diese Antwort wurde kein Werkzeug aufgerufen (z.B. weil die Frage keinen Wetterbezug hatte).";
   details.appendChild(summary);
   details.appendChild(pre);
   log.appendChild(details);
