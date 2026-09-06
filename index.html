@@ -169,7 +169,6 @@
     <span class="brand-sub" id="brandSub">ICON · ECMWF · GFS</span>
   </div>
   <div class="header-actions">
-    <label class="toggle"><input type="checkbox" id="nerd" /> Nerd-Modus</label>
     <button class="icon-btn" id="resetKey" title="Schlüssel ändern / entfernen">⚙︎</button>
   </div>
 </header>
@@ -188,7 +187,7 @@
    nach einem Deploy auf einen Blick sieht, ob das Handy schon die
    neue Version geladen hat.
    ============================================================ */
-const APP_VERSION = "1.3.1";
+const APP_VERSION = "1.4.0";
 
 /* ============================================================
    KONFIGURATION — 1:1 aus der ursprünglichen Weather Engine
@@ -764,7 +763,6 @@ const log = document.getElementById("log");
 const composer = document.getElementById("composer");
 const input = document.getElementById("input");
 const sendBtn = document.getElementById("send");
-const nerdToggle = document.getElementById("nerd");
 const brandSub = document.getElementById("brandSub");
 brandSub.textContent = `ICON · ECMWF · GFS · v${APP_VERSION}`;
 
@@ -807,8 +805,8 @@ function renderToolPanel(toolCalls) {
   title.className = "toolpanel-title";
   const count = toolCalls ? toolCalls.length : 0;
   title.textContent = count > 0
-    ? `🔧 ${count} Werkzeugaufruf${count > 1 ? "e" : ""} (Nerd-Modus)`
-    : `🔧 Keine Werkzeugaufrufe (Nerd-Modus)`;
+    ? `🔧 ${count} Werkzeugaufruf${count > 1 ? "e" : ""}`
+    : `🔧 Keine Werkzeugaufrufe`;
   const pre = document.createElement("pre");
   pre.className = "mono";
   pre.textContent = count > 0
@@ -876,7 +874,7 @@ composer.addEventListener("submit", async (e) => {
     });
     thinking.remove();
     renderMessage("assistant", result.reply || "(keine Antwort erhalten)");
-    if (nerdToggle.checked) renderToolPanel(result.toolCalls);
+    renderToolPanel(result.toolCalls);
     history.push({ role: "assistant", content: result.reply });
     saveHistory(history);
   } catch (err) {
