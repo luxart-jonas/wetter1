@@ -149,7 +149,7 @@
 
   @media (max-width: 480px) {
     .msg, .toolpanel { max-width: 90%; }
-    .brand-sub { display: none; }
+    .brand-sub { font-size: 0.62rem; }
   }
 </style>
 </head>
@@ -191,7 +191,7 @@
    nach einem Deploy auf einen Blick sieht, ob das Handy schon die
    neue Version geladen hat.
    ============================================================ */
-const APP_VERSION = "1.1.0";
+const APP_VERSION = "1.2.0";
 
 /* ============================================================
    KONFIGURATION — 1:1 aus der ursprünglichen Weather Engine
@@ -775,10 +775,11 @@ function safeGet(key) { try { return localStorage.getItem(key); } catch { return
 function safeSet(key, value) { try { localStorage.setItem(key, value); } catch {} }
 function safeRemove(key) { try { localStorage.removeItem(key); } catch {} }
 
-function loadHistory() {
-  try { return JSON.parse(safeGet(HISTORY_STORAGE) || "[]"); } catch { return []; }
-}
-function saveHistory(history) { safeSet(HISTORY_STORAGE, JSON.stringify(history.slice(-40))); }
+// Chatverlauf wird ABSICHTLICH NICHT gespeichert — jeder App-Start beginnt
+// mit einem neuen, leeren Chat. (Der API-Schlüssel bleibt trotzdem gespeichert.)
+function loadHistory() { return []; }
+function saveHistory() { /* bewusst deaktiviert — kein Verlauf wird gespeichert */ }
+safeRemove(HISTORY_STORAGE); // alten, noch gespeicherten Verlauf einmalig entfernen
 
 let history = loadHistory();
 
