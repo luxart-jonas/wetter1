@@ -1,0 +1,913 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Wetteranalyst</title>
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="icon-180.png">
+<meta name="theme-color" content="#10161d">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Work+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --bg: #eef1f4;
+    --surface: #ffffff;
+    --surface-2: #e3e8ed;
+    --text: #1b2430;
+    --muted: #5b6b7c;
+    --accent: #a8752e;
+    --accent-ink: #ffffff;
+    --border: #d2d9e0;
+    --danger: #8a2f2f;
+    --danger-bg: #f6e6e4;
+    --radius: 14px;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #10161d;
+      --surface: #1a2330;
+      --surface-2: #212c3b;
+      --text: #e7ecf1;
+      --muted: #94a3b3;
+      --accent: #d9a35a;
+      --accent-ink: #1b1206;
+      --border: #2a3644;
+      --danger: #e8b4ac;
+      --danger-bg: #3a1f1c;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10161d;
+    --surface: #1a2330;
+    --surface-2: #212c3b;
+    --text: #e7ecf1;
+    --muted: #94a3b3;
+    --accent: #d9a35a;
+    --accent-ink: #1b1206;
+    --border: #2a3644;
+    --danger: #e8b4ac;
+    --danger-bg: #3a1f1c;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Work Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .mono { font-family: "JetBrains Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.85rem 1.1rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex: none;
+  }
+  .brand { display: flex; align-items: baseline; gap: 0.5rem; }
+  .brand-mark { font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: 1.2rem; letter-spacing: 0.01em; }
+  .brand-sub { font-size: 0.72rem; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; }
+  .header-actions { display: flex; align-items: center; gap: 0.6rem; }
+  .icon-btn {
+    border: 1px solid var(--border); background: var(--surface); color: var(--muted);
+    border-radius: 999px; width: 2.1rem; height: 2.1rem; display: flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 1rem; line-height: 1;
+  }
+  .icon-btn:hover { border-color: var(--accent); color: var(--accent); }
+  label.toggle { display: flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; color: var(--muted); cursor: pointer; user-select: none; }
+  label.toggle input { accent-color: var(--accent); }
+
+  main { flex: 1; overflow-y: auto; padding: 1rem 1rem 0.5rem; display: flex; flex-direction: column; gap: 0.7rem; }
+  .hint-row {
+    align-self: center; max-width: 34rem; text-align: center; color: var(--muted); font-size: 0.82rem;
+    padding: 0.5rem 0.9rem; border: 1px dashed var(--border); border-radius: var(--radius);
+  }
+  .msg { max-width: 78%; padding: 0.65rem 0.95rem; border-radius: var(--radius); line-height: 1.5; white-space: pre-wrap; font-size: 0.94rem; }
+  .msg.user { align-self: flex-end; background: var(--accent); color: var(--accent-ink); border-bottom-right-radius: 4px; }
+  .msg.assistant { align-self: flex-start; background: var(--surface); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+  .msg.assistant.example { opacity: 0.82; }
+  .msg.error { align-self: flex-start; background: var(--danger-bg); color: var(--danger); border: 1px solid var(--danger); }
+  .example-tag { display: block; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 0.3rem; }
+
+  .toolpanel {
+    align-self: flex-start; max-width: 88%; border: 1px solid var(--border); border-radius: 10px;
+    background: var(--surface-2); overflow: hidden;
+  }
+  .toolpanel summary {
+    cursor: pointer; padding: 0.45rem 0.75rem; font-size: 0.76rem; color: var(--muted);
+    display: flex; align-items: center; gap: 0.4rem;
+  }
+  .toolpanel summary::-webkit-details-marker { display: none; }
+  .toolpanel summary:before { content: "▸"; display: inline-block; transition: transform 0.15s; }
+  .toolpanel[open] summary:before { transform: rotate(90deg); }
+  .toolpanel pre { margin: 0; padding: 0 0.75rem 0.7rem; font-size: 0.72rem; white-space: pre-wrap; word-break: break-word; color: var(--text); max-height: 16rem; overflow-y: auto; }
+
+  form#composer {
+    display: flex; gap: 0.6rem; padding: 0.8rem 1rem calc(0.8rem + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--border); background: var(--surface); flex: none;
+  }
+  #input {
+    flex: 1; resize: none; border: 1px solid var(--border); border-radius: 999px; padding: 0.7rem 1.1rem;
+    background: var(--bg); color: var(--text); font: inherit; font-size: 0.95rem; max-height: 6rem;
+  }
+  #input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  button.send {
+    border: none; background: var(--accent); color: var(--accent-ink); width: 2.7rem; height: 2.7rem;
+    border-radius: 999px; font-size: 1.1rem; cursor: pointer; flex: none;
+  }
+  button.send:disabled { opacity: 0.5; cursor: default; }
+  button.send:focus-visible, .icon-btn:focus-visible, #input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* Schlüssel-Gate */
+  #gate {
+    position: fixed; inset: 0; background: var(--bg); display: flex; align-items: center; justify-content: center; padding: 1.5rem; z-index: 10;
+  }
+  #gate .card {
+    max-width: 26rem; width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 18px;
+    padding: 1.6rem 1.5rem; display: flex; flex-direction: column; gap: 0.9rem;
+  }
+  #gate h1 { font-family: "Fraunces", Georgia, serif; font-size: 1.4rem; margin: 0; text-wrap: balance; }
+  #gate p { margin: 0; color: var(--muted); font-size: 0.88rem; line-height: 1.5; }
+  #gate input[type=password], #gate input[type=text] {
+    border: 1px solid var(--border); border-radius: 10px; padding: 0.65rem 0.8rem; background: var(--bg); color: var(--text); font: inherit;
+  }
+  #gate button {
+    border: none; background: var(--accent); color: var(--accent-ink); border-radius: 10px; padding: 0.7rem; font: inherit; font-weight: 600; cursor: pointer;
+  }
+  #gate a { color: var(--accent); }
+  #gate .fineprint { font-size: 0.74rem; color: var(--muted); }
+  [hidden] { display: none !important; }
+
+  @media (max-width: 480px) {
+    .msg, .toolpanel { max-width: 90%; }
+    .brand-sub { display: none; }
+  }
+</style>
+</head>
+<body>
+
+
+<div id="gate">
+  <div class="card">
+    <h1>🌤️ Wetteranalyst</h1>
+    <p>Diese App spricht direkt aus deinem Browser mit DeepSeek — dafür braucht sie deinen eigenen API-Schlüssel. Er wird nur auf diesem Gerät gespeichert (Browser-Speicher) und sonst nirgends hin geschickt außer an DeepSeek selbst.</p>
+    <input id="keyInput" type="password" placeholder="sk-… (DeepSeek API-Schlüssel)" autocomplete="off" />
+    <button id="keySave">Speichern &amp; loslegen</button>
+    <p class="fineprint">Schlüssel erstellen: <a href="https://platform.deepseek.com" target="_blank" rel="noopener">platform.deepseek.com</a>. Wetterdaten selbst kommen kostenlos von Open-Meteo, ohne eigenen Schlüssel.</p>
+  </div>
+</div>
+
+<header>
+  <div class="brand">
+    <span class="brand-mark">🌤️ Wetteranalyst</span>
+    <span class="brand-sub" id="brandSub">ICON · ECMWF · GFS</span>
+  </div>
+  <div class="header-actions">
+    <label class="toggle"><input type="checkbox" id="nerd" /> Nerd-Modus</label>
+    <button class="icon-btn" id="resetKey" title="Schlüssel ändern / entfernen">⚙︎</button>
+  </div>
+</header>
+
+<main id="log"></main>
+
+<form id="composer">
+  <input id="input" type="text" placeholder="Frag nach dem Wetter…" autocomplete="off" />
+  <button class="send" id="send" type="submit" aria-label="Senden">➤</button>
+</form>
+
+<script type="module">
+/* ============================================================
+   VERSION — bei jedem Update hochzählen. Wird im Header angezeigt
+   und an den Service Worker durchgereicht (siehe unten), damit man
+   nach einem Deploy auf einen Blick sieht, ob das Handy schon die
+   neue Version geladen hat.
+   ============================================================ */
+const APP_VERSION = "1.1.0";
+
+/* ============================================================
+   KONFIGURATION — 1:1 aus der ursprünglichen Weather Engine
+   (weather-engine/src/schema/weather.ts, providers/openMeteoClient.ts)
+   übernommen, damit dieselben verifizierten Open-Meteo-Parameter
+   gelten wie im Server-Prototyp.
+   ============================================================ */
+const MODEL_IDS = ["icon_d2", "icon_eu", "icon_global", "ecmwf_ifs", "ecmwf_aifs", "gfs"];
+const DEFAULT_MODELS = ["icon_d2", "ecmwf_ifs", "gfs"];
+
+const OPEN_METEO_MODEL_PARAM = {
+  icon_d2: "dwd_icon_d2",
+  icon_eu: "dwd_icon_eu",
+  icon_global: "dwd_icon_global",
+  ecmwf_ifs: "ecmwf_ifs",
+  ecmwf_aifs: "ecmwf_aifs_025",
+  gfs: "ncep_gfs_seamless",
+};
+
+const HOURLY_PARAM_MAP = {
+  temperature2m: "temperature_2m",
+  dewpoint2m: "dew_point_2m",
+  apparentTemperature: "apparent_temperature",
+  relativeHumidity: "relative_humidity_2m",
+  windSpeed10m: "wind_speed_10m",
+  windDirection10m: "wind_direction_10m",
+  windGusts10m: "wind_gusts_10m",
+  precipitation: "precipitation",
+  precipitationProbability: "precipitation_probability",
+  rain: "rain",
+  snowfall: "snowfall",
+  snowDepth: "snow_depth",
+  cloudCover: "cloud_cover",
+  cloudLow: "cloud_cover_low",
+  cloudMid: "cloud_cover_mid",
+  cloudHigh: "cloud_cover_high",
+  visibility: "visibility",
+  pressureMsl: "pressure_msl",
+  surfacePressure: "surface_pressure",
+  freezingLevelHeight: "freezing_level_height",
+  cape: "cape",
+  uvIndex: "uv_index",
+  shortwaveRadiation: "shortwave_radiation",
+};
+
+const DEFAULT_PROFILES = {
+  normal: { wind: 0.15, gusts: 0.1, precipitation: 0.25, cloud: 0.2, visibility: 0.15, temperature: 0.15 },
+  film: { wind: 0.25, gusts: 0.2, precipitation: 0.15, cloud: 0.15, visibility: 0.15, temperature: 0.1 },
+  wandern: { wind: 0.15, gusts: 0.15, precipitation: 0.25, cloud: 0.1, visibility: 0.2, temperature: 0.15 },
+};
+
+const REFERENCE_SPREAD = { temperature: 2, windSpeed: 10, windGusts: 15, precipitation: 1, cloudCover: 30 };
+
+/* ============================================================
+   THERMODYNAMIK — calc/thermodynamics.ts
+   ============================================================ */
+const MAGNUS_A = 17.62, MAGNUS_B = 243.12;
+
+function dewpointC(temperatureC, relativeHumidityPct) {
+  const rh = Math.min(100, Math.max(0.01, relativeHumidityPct));
+  const gamma = Math.log(rh / 100) + (MAGNUS_A * temperatureC) / (MAGNUS_B + temperatureC);
+  return (MAGNUS_B * gamma) / (MAGNUS_A - gamma);
+}
+function dewpointDepression(temperatureC, dewpointTempC) { return temperatureC - dewpointTempC; }
+function windChillC(temperatureC, windSpeedKmh) {
+  if (temperatureC > 10 || windSpeedKmh <= 4.8) return null;
+  const v16 = Math.pow(windSpeedKmh, 0.16);
+  return 13.12 + 0.6215 * temperatureC - 11.37 * v16 + 0.3965 * temperatureC * v16;
+}
+function apparentTemperatureWarmC(temperatureC, relativeHumidityPct, windSpeedMs) {
+  const vaporPressureHpa = (relativeHumidityPct / 100) * 6.105 * Math.exp((17.27 * temperatureC) / (237.7 + temperatureC));
+  return temperatureC + 0.33 * vaporPressureHpa - 0.7 * windSpeedMs - 4.0;
+}
+function apparentTemperatureC(temperatureC, relativeHumidityPct, windSpeedKmh) {
+  const chill = windChillC(temperatureC, windSpeedKmh);
+  if (chill !== null) return chill;
+  return apparentTemperatureWarmC(temperatureC, relativeHumidityPct, windSpeedKmh / 3.6);
+}
+function estimatedCloudBaseM(temperatureC, dewpointTempC) {
+  const depression = dewpointDepression(temperatureC, dewpointTempC);
+  if (depression < 0) return null;
+  return 125 * depression;
+}
+
+/* ============================================================
+   KONSENS / CONFIDENCE — calc/consensus.ts
+   ============================================================ */
+function mean(values) { return values.length === 0 ? null : values.reduce((a, b) => a + b, 0) / values.length; }
+function stddev(values) {
+  if (values.length < 2) return 0;
+  const m = mean(values);
+  const variance = values.reduce((s, v) => s + (v - m) ** 2, 0) / values.length;
+  return Math.sqrt(variance);
+}
+function confidenceScore(spread, referenceSpread, modelCount) {
+  if (modelCount < 2) return 50;
+  return Math.min(100, Math.max(0, 100 - (spread / referenceSpread) * 100));
+}
+function confidenceLabel(score) { return score >= 80 ? "hoch" : score >= 50 ? "mittel" : "niedrig"; }
+function analyzeParameter(values, referenceSpread) {
+  const clean = values.filter((v) => Number.isFinite(v));
+  const m = mean(clean);
+  const sd = stddev(clean);
+  const confidence = sd === null ? 0 : confidenceScore(sd, referenceSpread, clean.length);
+  return { mean: m, spread: sd, confidence, label: confidenceLabel(confidence), modelCount: clean.length };
+}
+function combinedConfidence(parts) {
+  const totalWeight = parts.reduce((s, p) => s + p.weight, 0);
+  if (totalWeight === 0) return 0;
+  return parts.reduce((s, p) => s + p.score * p.weight, 0) / totalWeight;
+}
+
+/* ============================================================
+   SICHTWEITE — calc/visibility.ts
+   ============================================================ */
+function hazeRiskFromDewpointDepression(depressionC) {
+  if (depressionC < 2) return "hoch";
+  if (depressionC <= 5) return "erhöht";
+  return "gering";
+}
+function assessVisibility(input) {
+  const depression = dewpointDepression(input.temperatureC, input.dewpointTempC);
+  const hazeRisk = hazeRiskFromDewpointDepression(depression);
+  let score = 100;
+  score -= Math.max(0, 5 - depression) * 12;
+  if (input.precipitationMm && input.precipitationMm > 0) score -= Math.min(30, input.precipitationMm * 10);
+  if (input.cloudLowPct !== null) score -= input.cloudLowPct * 0.2;
+  if (input.elevationM !== null && input.elevationM > 1200) score += Math.min(15, (input.elevationM - 1200) / 100);
+  score = Math.min(100, Math.max(0, score));
+  const heuristicLabel =
+    score >= 75 ? "voraussichtlich sehr gute Fernsicht (eigene Einschätzung)"
+    : score >= 45 ? "voraussichtlich eingeschränkte Fernsicht (eigene Einschätzung)"
+    : "voraussichtlich schlechte Fernsicht, Dunst-/Nebelrisiko (eigene Einschätzung)";
+  return { modelVisibilityM: input.modelVisibilityM, dewpointDepressionC: depression, hazeRisk, heuristicScore: score, heuristicLabel };
+}
+
+/* ============================================================
+   BESTES WETTERFENSTER — calc/bestWindow.ts
+   ============================================================ */
+const CURVE_LIMITS = { windZeroAtKmh: 60, gustsZeroAtKmh: 90, precipitationHalfLifeMm: 2, visibilityFullAtM: 40000, comfortTempC: 18, tempToleranceC: 12 };
+const clamp01to100 = (x) => Math.min(100, Math.max(0, x));
+function normScoreWind(v) { return clamp01to100(100 * (1 - v / CURVE_LIMITS.windZeroAtKmh)); }
+function normScoreGusts(v) { return clamp01to100(100 * (1 - v / CURVE_LIMITS.gustsZeroAtKmh)); }
+function normScorePrecipitation(v) { return clamp01to100(100 * Math.exp(-v / CURVE_LIMITS.precipitationHalfLifeMm)); }
+function normScoreCloud(v) { return clamp01to100(100 - v); }
+function normScoreVisibility(v) { return v === null ? 50 : clamp01to100((v / CURVE_LIMITS.visibilityFullAtM) * 100); }
+function normScoreTemperature(v) { return clamp01to100(100 - (Math.abs(v - CURVE_LIMITS.comfortTempC) / CURVE_LIMITS.tempToleranceC) * 50); }
+function scoreHour(hour, weights) {
+  const breakdown = {
+    wind: hour.windSpeedKmh === null ? null : normScoreWind(hour.windSpeedKmh),
+    gusts: hour.windGustsKmh === null ? null : normScoreGusts(hour.windGustsKmh),
+    precipitation: hour.precipitationMm === null ? null : normScorePrecipitation(hour.precipitationMm),
+    cloud: hour.cloudCoverPct === null ? null : normScoreCloud(hour.cloudCoverPct),
+    visibility: normScoreVisibility(hour.visibilityM),
+    temperature: hour.temperatureC === null ? null : normScoreTemperature(hour.temperatureC),
+  };
+  let weightedSum = 0, usedWeight = 0;
+  for (const key of Object.keys(weights)) {
+    const value = breakdown[key];
+    if (value === null || value === undefined) continue;
+    weightedSum += value * weights[key];
+    usedWeight += weights[key];
+  }
+  return { time: hour.time, score: usedWeight > 0 ? weightedSum / usedWeight : 0, breakdown };
+}
+function rankHours(hours, weights) { return hours.map((h) => scoreHour(h, weights)).sort((a, b) => b.score - a.score); }
+function bestContiguousWindow(scores, windowSizeHours) {
+  if (scores.length < windowSizeHours) return null;
+  const byTime = [...scores].sort((a, b) => a.time.localeCompare(b.time));
+  let best = null;
+  for (let i = 0; i <= byTime.length - windowSizeHours; i++) {
+    const slice = byTime.slice(i, i + windowSizeHours);
+    const avg = slice.reduce((s, h) => s + h.score, 0) / windowSizeHours;
+    if (!best || avg > best.averageScore) best = { startIndex: i, averageScore: avg };
+  }
+  if (!best) return null;
+  return { startTime: byTime[best.startIndex].time, endTime: byTime[best.startIndex + windowSizeHours - 1].time, averageScore: best.averageScore };
+}
+
+/* ============================================================
+   ZEITZONE — util/timezone.ts (DST-sicher via Intl)
+   ============================================================ */
+const formatterCache = new Map();
+function getFormatter(timeZone) {
+  let f = formatterCache.get(timeZone);
+  if (!f) {
+    f = new Intl.DateTimeFormat("en-US", { timeZone, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    formatterCache.set(timeZone, f);
+  }
+  return f;
+}
+function wallClockAsUtcMs(ms, timeZone) {
+  const parts = Object.fromEntries(getFormatter(timeZone).formatToParts(new Date(ms)).map((p) => [p.type, p.value]));
+  return Date.parse(`${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}Z`);
+}
+function zonedTimeToUtcIso(date, time, timeZone) {
+  const naiveMs = Date.parse(`${date}T${time}:00Z`);
+  if (Number.isNaN(naiveMs)) throw new Error(`Ungültiges Datum/Zeit-Format: "${date} ${time}"`);
+  let offset = wallClockAsUtcMs(naiveMs, timeZone) - naiveMs;
+  let utcMs = naiveMs - offset;
+  offset = wallClockAsUtcMs(utcMs, timeZone) - utcMs;
+  utcMs = naiveMs - offset;
+  return new Date(utcMs).toISOString();
+}
+
+/* ============================================================
+   GEOCODING — location/geocoding.ts
+   ============================================================ */
+const GEOCODING_URL = "https://geocoding-api.open-meteo.com/v1/search";
+const ELEVATION_URL = "https://api.open-meteo.com/v1/elevation";
+const COORDINATE_PATTERN = /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/;
+
+class LocationNotFoundError extends Error {
+  constructor(query) { super(`Kein Ort für "${query}" gefunden.`); this.name = "LocationNotFoundError"; }
+}
+async function fetchElevation(lat, lon) {
+  try {
+    const res = await fetch(`${ELEVATION_URL}?latitude=${lat}&longitude=${lon}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.elevation?.[0] ?? null;
+  } catch { return null; }
+}
+async function resolveLocation(query) {
+  const coordMatch = COORDINATE_PATTERN.exec(query);
+  if (coordMatch) {
+    const lat = Number(coordMatch[1]), lon = Number(coordMatch[2]);
+    const elevationM = await fetchElevation(lat, lon);
+    return { name: `${lat.toFixed(3)}, ${lon.toFixed(3)}`, lat, lon, elevationM };
+  }
+  const res = await fetch(`${GEOCODING_URL}?name=${encodeURIComponent(query)}&count=1&language=de`);
+  if (!res.ok) throw new Error(`Geocoding-Anfrage fehlgeschlagen (HTTP ${res.status})`);
+  const data = await res.json();
+  const first = data.results?.[0];
+  if (!first) throw new LocationNotFoundError(query);
+  const elevationM = first.elevation ?? (await fetchElevation(first.latitude, first.longitude));
+  return { name: [first.name, first.admin1, first.country].filter(Boolean).join(", "), lat: first.latitude, lon: first.longitude, elevationM };
+}
+
+/* ============================================================
+   OPEN-METEO CLIENT — providers/openMeteoClient.ts
+   ============================================================ */
+const OPEN_METEO_BASE_URL = "https://api.open-meteo.com/v1/forecast";
+const FETCH_TIMEOUT_MS = 10000;
+
+class OpenMeteoError extends Error {
+  constructor(message, httpStatus) { super(message); this.name = "OpenMeteoError"; this.httpStatus = httpStatus; }
+}
+function buildOpenMeteoUrl({ model, lat, lon, startDate, forecastDays }) {
+  const params = new URLSearchParams({
+    latitude: String(lat), longitude: String(lon),
+    hourly: Object.values(HOURLY_PARAM_MAP).join(",") + ",is_day",
+    models: OPEN_METEO_MODEL_PARAM[model], timezone: "UTC", timeformat: "iso8601",
+  });
+  if (startDate) params.set("start_date", startDate);
+  if (forecastDays) params.set("forecast_days", String(forecastDays));
+  return `${OPEN_METEO_BASE_URL}?${params.toString()}`;
+}
+function parseHourly(hourly, model, retrievedAt) {
+  if (!hourly) return [];
+  const times = hourly.time;
+  const get = (field, i) => { const v = hourly[HOURLY_PARAM_MAP[field]]?.[i]; return typeof v === "number" ? v : null; };
+  return times.map((t, i) => ({
+    model, runTime: retrievedAt, validTime: new Date(t.endsWith("Z") ? t : `${t}:00Z`).toISOString(),
+    temperature2m: get("temperature2m", i), dewpoint2m: get("dewpoint2m", i), apparentTemperature: get("apparentTemperature", i),
+    relativeHumidity: get("relativeHumidity", i), windSpeed10m: get("windSpeed10m", i), windDirection10m: get("windDirection10m", i),
+    windGusts10m: get("windGusts10m", i), precipitation: get("precipitation", i), precipitationProbability: get("precipitationProbability", i),
+    rain: get("rain", i), snowfall: get("snowfall", i), snowDepth: get("snowDepth", i), cloudCover: get("cloudCover", i),
+    cloudLow: get("cloudLow", i), cloudMid: get("cloudMid", i), cloudHigh: get("cloudHigh", i), visibility: get("visibility", i),
+    pressureMsl: get("pressureMsl", i), surfacePressure: get("surfacePressure", i), freezingLevelHeight: get("freezingLevelHeight", i),
+    cape: get("cape", i), uvIndex: get("uvIndex", i), shortwaveRadiation: get("shortwaveRadiation", i),
+    isDay: (() => { const raw = hourly["is_day"]?.[i]; return typeof raw === "number" ? raw === 1 : null; })(),
+  }));
+}
+async function fetchOpenMeteoHourly(query, retrievedAt) {
+  const url = buildOpenMeteoUrl(query);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  let res;
+  try {
+    res = await fetch(url, { signal: controller.signal, headers: { accept: "application/json" } });
+  } catch (err) {
+    throw new OpenMeteoError(`Netzwerkfehler beim Abruf von Open-Meteo: ${err.message}`);
+  } finally { clearTimeout(timeout); }
+  if (!res.ok) {
+    let reason = `HTTP ${res.status}`;
+    try { const body = await res.json(); if (body.reason) reason = body.reason; } catch {}
+    throw new OpenMeteoError(`Open-Meteo lehnte die Anfrage ab (${reason})`, res.status);
+  }
+  const data = await res.json();
+  if (data.error || !data.hourly) throw new OpenMeteoError(data.reason ?? "Open-Meteo lieferte keine stündlichen Daten (unbekannter Grund)");
+  return parseHourly(data.hourly, query.model, retrievedAt);
+}
+
+/* ============================================================
+   ENGINE — engine/query.ts + engine/bestWindowQuery.ts + engine/shared.ts
+   ============================================================ */
+function toHourKey(iso) { const d = new Date(iso); d.setUTCMinutes(0, 0, 0); return d.toISOString(); }
+function findHourAt(hours, isoTime) { const key = toHourKey(isoTime); return hours.find((h) => toHourKey(h.validTime) === key); }
+function inRange(iso, start, end) { const t = new Date(iso).getTime(); return t >= new Date(start).getTime() && t <= new Date(end).getTime(); }
+
+function computeMetrics(record, elevationM) {
+  if (record.temperature2m === null || record.relativeHumidity === null) return null;
+  const dp = dewpointC(record.temperature2m, record.relativeHumidity);
+  const apparentT = apparentTemperatureC(record.temperature2m, record.relativeHumidity, record.windSpeed10m ?? 0);
+  const cloudBase = estimatedCloudBaseM(record.temperature2m, dp);
+  const visibility = assessVisibility({
+    temperatureC: record.temperature2m, dewpointTempC: dp, relativeHumidityPct: record.relativeHumidity,
+    precipitationMm: record.precipitation, cloudLowPct: record.cloudLow, elevationM, modelVisibilityM: record.visibility,
+  });
+  return { dewpointC: dp, dewpointDepressionC: dewpointDepression(record.temperature2m, dp), apparentTemperatureC: apparentT, cloudBaseM: cloudBase, visibility };
+}
+
+async function fetchModel(model, location, time) {
+  const retrievedAt = new Date().toISOString();
+  try {
+    const forecastDays = model === "icon_d2" ? 2 : 10;
+    const hours = await fetchOpenMeteoHourly({ model, lat: location.lat, lon: location.lon, forecastDays }, retrievedAt);
+    const targetTime = time.kind === "instant" ? time.time : time.start;
+    const hour = findHourAt(hours, targetTime);
+    if (!hour) return { model, status: "no_data_for_time", reason: `${model} liefert für diesen Zeitpunkt keine Daten (außerhalb des Vorhersagezeitraums des Modells).` };
+    const computed = computeMetrics(hour, location.elevationM);
+    return { model, status: "ok", raw: hour, computed: computed ?? undefined };
+  } catch (err) {
+    return { model, status: "unavailable", reason: err.message };
+  }
+}
+
+function buildConsensus(models) {
+  const ok = models.filter((m) => m.status === "ok" && m.raw);
+  if (ok.length === 0) return { consensus: null, confidenceTotal: null };
+  const values = (pick) => ok.map((m) => pick(m.raw)).filter((v) => v !== null);
+  const consensus = {
+    temperature: analyzeParameter(values((r) => r.temperature2m), REFERENCE_SPREAD.temperature),
+    windSpeed: analyzeParameter(values((r) => r.windSpeed10m), REFERENCE_SPREAD.windSpeed),
+    windGusts: analyzeParameter(values((r) => r.windGusts10m), REFERENCE_SPREAD.windGusts),
+    precipitation: analyzeParameter(values((r) => r.precipitation), REFERENCE_SPREAD.precipitation),
+    cloudCover: analyzeParameter(values((r) => r.cloudCover), REFERENCE_SPREAD.cloudCover),
+  };
+  const confidenceTotal = combinedConfidence([
+    { score: consensus.temperature.confidence, weight: 0.2 }, { score: consensus.windSpeed.confidence, weight: 0.25 },
+    { score: consensus.windGusts.confidence, weight: 0.2 }, { score: consensus.precipitation.confidence, weight: 0.2 },
+    { score: consensus.cloudCover.confidence, weight: 0.15 },
+  ]);
+  return { consensus, confidenceTotal };
+}
+
+async function queryWeather(location, time, models = DEFAULT_MODELS) {
+  const results = await Promise.all(models.map((m) => fetchModel(m, location, time)));
+  const notes = [];
+  for (const r of results) {
+    if (r.status === "no_data_for_time" && r.model === "icon_d2") notes.push("ICON-D2 deckt nur ca. 48h ab und war für diesen Zeitpunkt nicht verfügbar. Der Vergleich basiert auf den übrigen angefragten Modellen.");
+    else if (r.status === "unavailable") notes.push(`${r.model}: ${r.reason}`);
+  }
+  const { consensus, confidenceTotal } = buildConsensus(results);
+  return { location, requestedTime: time, generatedAt: new Date().toISOString(), models: results, consensus, confidenceTotal, notes };
+}
+
+function buildEnsembleHourly(perModelHours, start, end) {
+  const byHour = new Map();
+  for (const hours of perModelHours) for (const h of hours) {
+    if (!inRange(h.validTime, start, end)) continue;
+    const key = toHourKey(h.validTime);
+    const bucket = byHour.get(key) ?? [];
+    bucket.push(h); byHour.set(key, bucket);
+  }
+  const pick = (records, field) => { const values = records.map((r) => r[field]).filter((v) => typeof v === "number"); return mean(values); };
+  return [...byHour.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([time, records]) => ({
+    time, windSpeedKmh: pick(records, "windSpeed10m"), windGustsKmh: pick(records, "windGusts10m"),
+    precipitationMm: pick(records, "precipitation"), cloudCoverPct: pick(records, "cloudCover"),
+    visibilityM: pick(records, "visibility"), temperatureC: pick(records, "temperature2m"),
+  }));
+}
+
+async function findBestWeatherWindow(location, range, models, profileWeights) {
+  const time = { kind: "range", start: range.start, end: range.end };
+  const notes = [], modelsUsed = [], perModelHours = [];
+  for (const model of models) {
+    const forecastDays = model === "icon_d2" ? 2 : 10;
+    try {
+      const hours = await fetchOpenMeteoHourly({ model, lat: location.lat, lon: location.lon, forecastDays }, new Date().toISOString());
+      perModelHours.push(hours); modelsUsed.push(model);
+    } catch (err) { notes.push(`${model}: ${err.message}`); }
+  }
+  if (perModelHours.length === 0) return { location, range, profileWeights, rankedHours: [], bestHour: null, bestContiguous3h: null, modelsUsed: [], notes: [...notes, "Kein Modell hat Daten für diesen Zeitraum geliefert."] };
+  const ensembleHours = buildEnsembleHourly(perModelHours, range.start, range.end);
+  const rankedHours = rankHours(ensembleHours, profileWeights);
+  const bestContiguous3h = bestContiguousWindow(rankedHours, 3);
+  return { location, range, profileWeights, rankedHours, bestHour: rankedHours[0] ?? null, bestContiguous3h, modelsUsed, notes };
+}
+
+function shapeVisibilityResponse(result) {
+  return {
+    location: result.location, requestedTime: result.requestedTime,
+    perModel: result.models.map((m) => ({ model: m.model, status: m.status, modelVisibilityM: m.computed?.visibility.modelVisibilityM ?? null, hazeRisk: m.computed?.visibility.hazeRisk ?? null, heuristicScore: m.computed?.visibility.heuristicScore ?? null, heuristicLabel: m.computed?.visibility.heuristicLabel ?? null })),
+    notes: result.notes,
+  };
+}
+function shapeConsensusResponse(result) {
+  return { location: result.location, requestedTime: result.requestedTime, consensus: result.consensus, confidenceTotal: result.confidenceTotal, notes: result.notes };
+}
+
+/* ============================================================
+   VALIDIERUNG (leichtgewichtig statt Zod — reine Browser-Anwendung)
+   ============================================================ */
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const TIME_RE = /^([01]\d|2[0-3]):00$/;
+
+function validateInstant(args) {
+  if (typeof args.location !== "string" || !args.location.trim()) throw new Error("'location' fehlt oder ist leer.");
+  if (typeof args.date !== "string" || !DATE_RE.test(args.date)) throw new Error("'date' muss im Format YYYY-MM-DD sein.");
+  const time = args.time && TIME_RE.test(args.time) ? args.time : "12:00";
+  const models = Array.isArray(args.models) && args.models.length ? args.models.filter((m) => MODEL_IDS.includes(m)) : DEFAULT_MODELS;
+  const timeZone = typeof args.timeZone === "string" && args.timeZone ? args.timeZone : "Europe/Berlin";
+  return { location: args.location, date: args.date, time, models: models.length ? models : DEFAULT_MODELS, timeZone };
+}
+function validateBestWindow(args) {
+  if (typeof args.location !== "string" || !args.location.trim()) throw new Error("'location' fehlt oder ist leer.");
+  if (typeof args.date !== "string" || !DATE_RE.test(args.date)) throw new Error("'date' muss im Format YYYY-MM-DD sein.");
+  const tr = args.timeRange;
+  if (!tr || !TIME_RE.test(tr.start) || !TIME_RE.test(tr.end)) throw new Error("'timeRange.start'/'timeRange.end' müssen im Format HH:00 sein.");
+  const models = Array.isArray(args.models) && args.models.length ? args.models.filter((m) => MODEL_IDS.includes(m)) : DEFAULT_MODELS;
+  const profile = ["normal", "film", "wandern"].includes(args.profile) ? args.profile : "normal";
+  const timeZone = typeof args.timeZone === "string" && args.timeZone ? args.timeZone : "Europe/Berlin";
+  return { location: args.location, date: args.date, timeRange: tr, models: models.length ? models : DEFAULT_MODELS, profile, timeZone };
+}
+
+async function runInstantQuery(input) {
+  const location = await resolveLocation(input.location);
+  const isoTime = zonedTimeToUtcIso(input.date, input.time, input.timeZone);
+  return queryWeather(location, { kind: "instant", time: isoTime }, input.models);
+}
+async function runBestWindowQuery(input) {
+  const location = await resolveLocation(input.location);
+  const startIso = zonedTimeToUtcIso(input.date, input.timeRange.start, input.timeZone);
+  const endIso = zonedTimeToUtcIso(input.date, input.timeRange.end, input.timeZone);
+  const weights = DEFAULT_PROFILES[input.profile] ?? DEFAULT_PROFILES.normal;
+  return findBestWeatherWindow(location, { start: startIso, end: endIso }, input.models, weights);
+}
+
+/* ============================================================
+   DEEPSEEK TOOL-DEFINITIONEN — deepseek/tools.ts
+   ============================================================ */
+const MODELS_PARAM = { type: "array", items: { type: "string", enum: MODEL_IDS }, description: "Optionale Auswahl der Wettermodelle. Weglassen = Standardauswahl (icon_d2, ecmwf_ifs, gfs)." };
+const LOCATION_PARAM = { type: "string", description: "Ortsname (z.B. 'Zugspitze', 'Köln') oder Koordinaten als 'lat, lon'." };
+const DATE_PARAM = { type: "string", description: "Datum im Format YYYY-MM-DD." };
+const TIME_ZONE_PARAM = { type: "string", description: "IANA-Zeitzone der Nutzerangabe. Weglassen = Europe/Berlin." };
+function instantParameters(timeDescription) {
+  return { type: "object", properties: { location: LOCATION_PARAM, date: DATE_PARAM, time: { type: "string", description: timeDescription }, models: MODELS_PARAM, timeZone: TIME_ZONE_PARAM }, required: ["location", "date"] };
+}
+const DEEPSEEK_TOOLS = [
+  { type: "function", function: { name: "get_weather", description: "Wetter an einem Ort zu einem bestimmten Zeitpunkt (Standardfall).", parameters: instantParameters("Uhrzeit HH:00, z.B. '14:00'. Weglassen = 12:00.") } },
+  { type: "function", function: { name: "get_hourly_weather", description: "Wie get_weather, für eine explizite Stunde.", parameters: instantParameters("Uhrzeit HH:00.") } },
+  { type: "function", function: { name: "get_weather_details", description: "Vollständige Rohdaten für 'Nerd-Modus'-Anfragen.", parameters: instantParameters("Uhrzeit HH:00. Weglassen = 12:00.") } },
+  { type: "function", function: { name: "compare_models", description: "Expliziter Modellvergleich.", parameters: instantParameters("Uhrzeit HH:00. Weglassen = 12:00.") } },
+  { type: "function", function: { name: "get_mountain_weather", description: "Wie get_weather, mit Fokus auf Berg-/Höhenlagen.", parameters: instantParameters("Uhrzeit HH:00. Weglassen = 12:00.") } },
+  { type: "function", function: { name: "get_visibility", description: "Nur die Fernsicht-Einschätzung (3 Ebenen).", parameters: instantParameters("Uhrzeit HH:00. Weglassen = 12:00.") } },
+  { type: "function", function: { name: "get_model_consensus", description: "Nur Modell-Konsens und Confidence-Score.", parameters: instantParameters("Uhrzeit HH:00. Weglassen = 12:00.") } },
+  { type: "function", function: { name: "find_best_weather_window", description: "Bestes Wetterfenster innerhalb eines Zeitraums an einem Tag.", parameters: {
+    type: "object", properties: {
+      location: LOCATION_PARAM, date: DATE_PARAM,
+      timeRange: { type: "object", properties: { start: { type: "string", description: "Beginn, Format HH:00." }, end: { type: "string", description: "Ende, Format HH:00." } }, required: ["start", "end"] },
+      models: MODELS_PARAM,
+      profile: { type: "string", enum: ["normal", "film", "wandern"], description: "Gewichtungsprofil: normal/film/wandern. Weglassen = normal." },
+      timeZone: TIME_ZONE_PARAM,
+    }, required: ["location", "date", "timeRange"],
+  } } },
+];
+
+/* ============================================================
+   TOOL-EXECUTOR — deepseek/toolExecutor.ts
+   ============================================================ */
+async function executeTool(name, argsJson) {
+  let args;
+  try { args = argsJson ? JSON.parse(argsJson) : {}; } catch { return { error: "Konnte die Tool-Argumente nicht als JSON lesen." }; }
+  try {
+    switch (name) {
+      case "get_weather": case "get_hourly_weather": case "get_weather_details": case "compare_models": case "get_mountain_weather":
+        return await runInstantQuery(validateInstant(args));
+      case "get_visibility":
+        return shapeVisibilityResponse(await runInstantQuery(validateInstant(args)));
+      case "get_model_consensus":
+        return shapeConsensusResponse(await runInstantQuery(validateInstant(args)));
+      case "find_best_weather_window":
+        return await runBestWindowQuery(validateBestWindow(args));
+      default:
+        return { error: `Unbekanntes Tool: "${name}".` };
+    }
+  } catch (err) {
+    if (err instanceof LocationNotFoundError) return { error: err.message };
+    return { error: err.message || "Unbekannter Fehler in der Weather Engine." };
+  }
+}
+
+/* ============================================================
+   SYSTEMPROMPT — deepseek/systemPrompt.ts (heutiges Datum wird
+   serverseitig/hier im Code berechnet, NIE von DeepSeek geraten —
+   siehe Kommentar im Original, das war ein echter Bug)
+   ============================================================ */
+function buildSystemPrompt(now = new Date()) {
+  const fmt = new Intl.DateTimeFormat("de-DE", { timeZone: "Europe/Berlin", weekday: "long", year: "numeric", month: "2-digit", day: "2-digit" });
+  const parts = fmt.formatToParts(now);
+  const get = (t) => parts.find((p) => p.type === t)?.value ?? "";
+  const isoDate = `${get("year")}-${get("month")}-${get("day")}`;
+  const weekday = get("weekday");
+  return `Du bist der KI-Wetteranalyst. Du verstehst natürliche Sprache und rufst passende Werkzeuge auf.
+
+OBERSTE REGEL, ohne Ausnahme: Du lieferst NIEMALS eine konkrete Wetterangabe (Temperatur, Wind, Niederschlag, Bewölkung, Sicht, gefühlte Temperatur, o.ä.) aus eigenem Wissen, aus Erinnerung, "typischerweise für die Jahreszeit" oder als Schätzung. Jede Frage mit Wetterbezug beantwortest du ausschließlich mit dem Ergebnis eines Werkzeugaufrufs — auch wenn dir die Antwort trivial, offensichtlich oder aus dem Gespräch "schon bekannt" erscheint. Im Zweifel rufst du das Werkzeug lieber einmal zu oft auf, als zu raten. Du erfindest niemals Zahlen und tust dann so, als kämen sie aus einem Werkzeug.
+
+UHRZEIT: Nutzer müssen NIEMALS eine exakte Uhrzeit angeben. "Wie wird das Wetter morgen in Köln?" ist eine vollständige, völlig legitime Frage. Fehlt eine Uhrzeit, fragst du NICHT nach, sondern rufst das Werkzeug direkt mit der Standardzeit 12:00 auf, lieferst die Antwort für den Mittag und erwähnst kurz und beiläufig, dass sich das auf den Mittag bezieht (z.B. "gegen Mittag: ..."). Du kannst anbieten, auch andere Uhrzeiten oder ein ganzes Zeitfenster (find_best_weather_window) zu prüfen — das ist ein Angebot, keine Voraussetzung. Frage nur dann proaktiv nach, wenn der Nutzer selbst einen Zeitbezug andeutet, der unklar bleibt (z.B. "wann genau soll ich morgen losfahren" ohne jede weitere Eingrenzung).
+
+WICHTIG — heutiges Datum: Heute ist ${weekday}, der ${isoDate} (Zeitzone Europe/Berlin). Rechne relative Zeitangaben ("heute", "morgen", "übermorgen", "nächsten Montag", "in 3 Tagen" usw.) IMMER ausgehend von diesem Datum in ein exaktes Datum im Format YYYY-MM-DD um. Rate niemals ein Datum und nimm niemals ein anderes Jahr an als das oben genannte.
+
+Regeln, die du IMMER befolgst:
+1. Für jede Frage, die eine konkrete Wetterangabe braucht, rufst du zuerst das passende Werkzeug auf. Du beantwortest solche Fragen niemals aus dem Gedächtnis oder mit einer Schätzung (siehe OBERSTE REGEL oben).
+2. Wenn ein Werkzeug einen Fehler liefert, sagst du das dem Nutzer sachlich und knapp — du füllst die Lücke nicht mit einer erfundenen Zahl. Keine übertriebene Entschuldigung, kein "mir ist ein Fehler unterlaufen" — nenne einfach kurz den Grund (z.B. Modell nicht verfügbar) und ggf. eine Alternative.
+3. Wenn ein Modell für den Zeitpunkt keine Daten hat (z.B. ICON-D2 deckt nur ~48h ab), erwähnst du das statt es zu verschweigen.
+4. Sichtweiten-Angaben sind eine Heuristik (0-100 Score + Label), keine exakte Kilometerzahl — stelle sie entsprechend vorsichtig dar.
+5. Der Konsens-/Confidence-Wert beschreibt, wie einig sich die Modelle sind — bei nur einem verfügbaren Modell ist das kein Beweis für hohe Sicherheit; sag das dann.
+6. Antworte in der Sprache der Nutzerfrage (Standard: Deutsch), knapp und konkret. Keine Rohdatentabellen, außer im Nerd-Modus explizit gewünscht.
+7. Bei Fragen ohne Wetterbezug antworte normal ohne Werkzeugaufruf.
+8. Du entschuldigst dich nicht präventiv und behauptest nicht, dir sei ein Fehler unterlaufen, wenn tatsächlich keiner passiert ist. Falls du tatsächlich etwas falsch gemacht hast, korrigierst du es schlicht und sachlich, ohne Drama.`;
+}
+
+/* ============================================================
+   DEEPSEEK CLIENT + TOOL-CALLING-LOOP — deepseek/client.ts + chatLoop.ts
+   ============================================================ */
+async function callDeepSeek(apiKey, messages) {
+  const res = await fetch("https://api.deepseek.com/chat/completions", {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({ model: "deepseek-chat", messages, tools: DEEPSEEK_TOOLS, tool_choice: "auto", temperature: 0.2 }),
+  });
+  if (!res.ok) {
+    const bodyText = await res.text().catch(() => "");
+    throw new Error(`DeepSeek API antwortete mit ${res.status}: ${bodyText.slice(0, 300)}`);
+  }
+  const data = await res.json();
+  const choice = data.choices?.[0];
+  if (!choice) throw new Error("DeepSeek API lieferte keine 'choices' in der Antwort.");
+  return choice.message;
+}
+
+const MAX_TOOL_ITERATIONS = 5;
+async function runChatTurn(apiKey, history, userMessage, onToolCall) {
+  const messages = [{ role: "system", content: buildSystemPrompt() }, ...history, { role: "user", content: userMessage }];
+  const toolCalls = [];
+  for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
+    const message = await callDeepSeek(apiKey, messages);
+    messages.push(message);
+    if (!message.tool_calls || message.tool_calls.length === 0) return { reply: message.content ?? "", toolCalls };
+    for (const call of message.tool_calls) {
+      onToolCall?.(call.function.name);
+      const result = await executeTool(call.function.name, call.function.arguments);
+      toolCalls.push({ name: call.function.name, arguments: call.function.arguments, result });
+      messages.push({ role: "tool", tool_call_id: call.id, content: JSON.stringify(result) });
+    }
+  }
+  return { reply: "Ich konnte deine Anfrage nicht abschließend beantworten (zu viele Werkzeugaufrufe in Folge). Bitte formuliere die Frage konkreter.", toolCalls };
+}
+
+/* ============================================================
+   UI
+   ============================================================ */
+const KEY_STORAGE = "wetteranalyst_deepseek_key";
+const HISTORY_STORAGE = "wetteranalyst_history";
+
+const gate = document.getElementById("gate");
+const keyInput = document.getElementById("keyInput");
+const keySave = document.getElementById("keySave");
+const resetKeyBtn = document.getElementById("resetKey");
+const log = document.getElementById("log");
+const composer = document.getElementById("composer");
+const input = document.getElementById("input");
+const sendBtn = document.getElementById("send");
+const nerdToggle = document.getElementById("nerd");
+const brandSub = document.getElementById("brandSub");
+brandSub.textContent = `ICON · ECMWF · GFS · v${APP_VERSION}`;
+
+function safeGet(key) { try { return localStorage.getItem(key); } catch { return null; } }
+function safeSet(key, value) { try { localStorage.setItem(key, value); } catch {} }
+function safeRemove(key) { try { localStorage.removeItem(key); } catch {} }
+
+function loadHistory() {
+  try { return JSON.parse(safeGet(HISTORY_STORAGE) || "[]"); } catch { return []; }
+}
+function saveHistory(history) { safeSet(HISTORY_STORAGE, JSON.stringify(history.slice(-40))); }
+
+let history = loadHistory();
+
+const EXAMPLE_EXCHANGE = {
+  question: "Wann ist morgen zwischen 8 und 18 Uhr das beste Wetter zum Wandern auf der Zugspitze?",
+  answer: "Beispiel — so beantwortet der Wetteranalyst eine echte Frage: er ruft find_best_weather_window auf, vergleicht ICON-D2, ECMWF und GFS stundenweise und nennt dir das beste Zeitfenster mit Begründung (Wind, Niederschlag, Sicht). Stell unten deine eigene Frage.",
+};
+
+function renderMessage(role, text, opts = {}) {
+  const el = document.createElement("div");
+  el.className = "msg " + role + (opts.example ? " example" : "");
+  if (opts.example) {
+    const tag = document.createElement("span");
+    tag.className = "example-tag";
+    tag.textContent = "Beispiel";
+    el.appendChild(tag);
+  }
+  el.appendChild(document.createTextNode(text));
+  log.appendChild(el);
+  log.scrollTop = log.scrollHeight;
+  return el;
+}
+
+function renderToolPanel(toolCalls) {
+  if (!toolCalls || toolCalls.length === 0) return;
+  const details = document.createElement("details");
+  details.className = "toolpanel";
+  const summary = document.createElement("summary");
+  summary.textContent = `${toolCalls.length} Werkzeugaufruf${toolCalls.length > 1 ? "e" : ""} (Nerd-Modus)`;
+  const pre = document.createElement("pre");
+  pre.className = "mono";
+  pre.textContent = toolCalls.map((c) => `▸ ${c.name}(${c.arguments})\n${JSON.stringify(c.result, null, 2)}`).join("\n\n");
+  details.appendChild(summary);
+  details.appendChild(pre);
+  log.appendChild(details);
+  log.scrollTop = log.scrollHeight;
+}
+
+function renderInitial() {
+  log.innerHTML = "";
+  if (history.length === 0) {
+    renderMessage("assistant", EXAMPLE_EXCHANGE.question + "\n\n" + EXAMPLE_EXCHANGE.answer, { example: true });
+    const hint = document.createElement("div");
+    hint.className = "hint-row";
+    hint.textContent = "Echte Wetterdaten von Open-Meteo (ICON, ECMWF, GFS) · keine erfundenen Werte · Schätzungen sind klar als solche gekennzeichnet";
+    log.appendChild(hint);
+  } else {
+    for (const m of history) renderMessage(m.role, m.content);
+  }
+}
+
+function openGate() {
+  gate.hidden = false;
+  keyInput.value = "";
+  keyInput.focus();
+}
+function closeGate() { gate.hidden = true; }
+
+keySave.addEventListener("click", () => {
+  const v = keyInput.value.trim();
+  if (!v) return;
+  safeSet(KEY_STORAGE, v);
+  closeGate();
+});
+keyInput.addEventListener("keydown", (e) => { if (e.key === "Enter") keySave.click(); });
+resetKeyBtn.addEventListener("click", () => {
+  if (confirm("Schlüssel entfernen? Du musst ihn dann neu eingeben, um weiter zu chatten.")) {
+    safeRemove(KEY_STORAGE);
+    openGate();
+  }
+});
+
+composer.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const message = input.value.trim();
+  if (!message) return;
+  const apiKey = safeGet(KEY_STORAGE);
+  if (!apiKey) { openGate(); return; }
+
+  renderMessage("user", message);
+  history.push({ role: "user", content: message });
+  saveHistory(history);
+  input.value = "";
+  input.disabled = true;
+  sendBtn.disabled = true;
+
+  const thinking = renderMessage("assistant", "… denkt nach …");
+
+  try {
+    const result = await runChatTurn(apiKey, history.slice(0, -1), message, (toolName) => {
+      thinking.textContent = `… ruft ${toolName} auf …`;
+    });
+    thinking.remove();
+    renderMessage("assistant", result.reply || "(keine Antwort erhalten)");
+    if (nerdToggle.checked) renderToolPanel(result.toolCalls);
+    history.push({ role: "assistant", content: result.reply });
+    saveHistory(history);
+  } catch (err) {
+    thinking.remove();
+    let msg = err.message || String(err);
+    if (msg.includes("Failed to fetch") || msg.includes("NetworkError")) {
+      msg += " — falls das öfter passiert, blockiert eventuell dein Browser/Netzwerk direkte Anfragen an api.deepseek.com.";
+    }
+    renderMessage("error", msg);
+  } finally {
+    input.disabled = false;
+    sendBtn.disabled = false;
+    input.focus();
+  }
+});
+
+// Start
+if (safeGet(KEY_STORAGE)) closeGate(); else openGate();
+renderInitial();
+
+// Service Worker wieder entfernt (verursachte auf manchen Handys hängende,
+// veraltete Seitenstände). Alle vorhandenen Registrierungen + deren Cache
+// aktiv abmelden/leeren, damit alte Installationen sich selbst heilen.
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.getRegistrations().then((regs) => {
+    regs.forEach((reg) => reg.unregister());
+  }).catch(() => {});
+}
+if ("caches" in window) {
+  caches.keys().then((keys) => {
+    keys.forEach((k) => { if (k.startsWith("wetteranalyst")) caches.delete(k); });
+  }).catch(() => {});
+}
+</script>
+
+</body>
+</html>
