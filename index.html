@@ -180,7 +180,13 @@
   <button class="send" id="send" type="submit" aria-label="Senden">➤</button>
 </form>
 
-<script type="module">
+<script>
+/* Bewusst KEIN type="module": module-Skripte werden von Chrome/Safari
+   beim direkten Öffnen einer HTML-Datei über file:// aus CORS-Gründen
+   nicht ausgeführt (auch inline, auch ohne import/export) — die ganze
+   App bliebe dann auf dem Schlüssel-Gate hängen, ohne dass je ein
+   Fehler sichtbar wird. Dieses Skript nutzt ohnehin kein import/export,
+   ein klassisches Skript funktioniert identisch und läuft auch lokal. */
 /* ============================================================
    KONFIGURATION — 1:1 aus der ursprünglichen Weather Engine
    (weather-engine/src/schema/weather.ts, providers/openMeteoClient.ts)
