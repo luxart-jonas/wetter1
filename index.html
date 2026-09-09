@@ -202,7 +202,7 @@
    nach einem Deploy auf einen Blick sieht, ob das Handy schon die
    neue Version geladen hat.
    ============================================================ */
-const APP_VERSION = "1.2.1";
+const APP_VERSION = "1.3.0";
 
 /* ============================================================
    KONFIGURATION — 1:1 aus der ursprünglichen Weather Engine
@@ -850,7 +850,9 @@ async function runChatTurn(apiKey, history, userMessage, onToolCall) {
    UI
    ============================================================ */
 const KEY_STORAGE = "wetteranalyst_deepseek_key";
-const HISTORY_STORAGE = "wetteranalyst_history";
+/* Bewusst KEIN gespeicherter Chatverlauf mehr: die App soll bei jedem Start
+   mit einem frischen Chat beginnen (nur der DeepSeek-Schlüssel bleibt
+   gespeichert). Vorher wurde der Verlauf in localStorage gehalten. */
 
 const gate = document.getElementById("gate");
 const keyInput = document.getElementById("keyInput");
@@ -871,12 +873,7 @@ function safeGet(key) { try { return localStorage.getItem(key); } catch { return
 function safeSet(key, value) { try { localStorage.setItem(key, value); } catch {} }
 function safeRemove(key) { try { localStorage.removeItem(key); } catch {} }
 
-function loadHistory() {
-  try { return JSON.parse(safeGet(HISTORY_STORAGE) || "[]"); } catch { return []; }
-}
-function saveHistory(history) { safeSet(HISTORY_STORAGE, JSON.stringify(history.slice(-40))); }
-
-let history = loadHistory();
+let history = [];
 
 const EXAMPLE_EXCHANGE = {
   question: "Wann ist morgen zwischen 8 und 18 Uhr das beste Wetter zum Wandern auf der Zugspitze?",
@@ -956,7 +953,6 @@ composer.addEventListener("submit", async (e) => {
 
   renderMessage("user", message);
   history.push({ role: "user", content: message });
-  saveHistory(history);
   input.value = "";
   input.disabled = true;
   sendBtn.disabled = true;
@@ -985,7 +981,6 @@ composer.addEventListener("submit", async (e) => {
     renderMessage("assistant", result.reply || "(keine Antwort erhalten)");
     if (nerdToggle.checked) renderToolPanel(result.toolCalls);
     history.push({ role: "assistant", content: result.reply });
-    saveHistory(history);
   } catch (err) {
     clearInterval(ticker);
     thinking.remove();
