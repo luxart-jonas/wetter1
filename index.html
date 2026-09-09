@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Wetteranalyst</title>
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="icon-180.png">
+<meta name="theme-color" content="#10161d">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Work+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
   :root {
@@ -53,7 +57,11 @@
     background: var(--bg);
     color: var(--text);
     font-family: "Work Sans", -apple-system, BlinkMacSystemFont, sans-serif;
-    height: 100vh;
+    height: 100vh; /* Fallback für ältere Browser */
+    height: 100dvh; /* dynamische Viewport-Höhe — berücksichtigt die Adressleiste
+                        mobiler Browser (Android Chrome vor allem); mit reinem
+                        100vh landete das Eingabefeld unten unsichtbar außerhalb
+                        des sichtbaren Bereichs, solange die Adressleiste zu sehen war */
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -165,7 +173,7 @@
 <header>
   <div class="brand">
     <span class="brand-mark">🌤️ Wetteranalyst</span>
-    <span class="brand-sub">ICON · ECMWF · GFS</span>
+    <span class="brand-sub" id="brandSub">ICON · ECMWF · GFS</span>
   </div>
   <div class="header-actions">
     <label class="toggle"><input type="checkbox" id="nerd" /> Nerd-Modus</label>
@@ -183,10 +191,17 @@
 <script>
 /* Bewusst KEIN type="module": module-Skripte werden von Chrome/Safari
    beim direkten Öffnen einer HTML-Datei über file:// aus CORS-Gründen
-   nicht ausgeführt (auch inline, auch ohne import/export) — die ganze
-   App bliebe dann auf dem Schlüssel-Gate hängen, ohne dass je ein
-   Fehler sichtbar wird. Dieses Skript nutzt ohnehin kein import/export,
-   ein klassisches Skript funktioniert identisch und läuft auch lokal. */
+   nicht ausgeführt (auch inline, auch ohne import/export). Über https
+   (wie hier auf GitHub Pages) macht das keinen Unterschied, aber ein
+   klassisches Skript läuft zusätzlich auch lokal ohne Server. */
+/* ============================================================
+   VERSION — bei jedem Update hochzählen. Wird im Header angezeigt
+   und an den Service Worker durchgereicht (siehe unten), damit man
+   nach einem Deploy auf einen Blick sieht, ob das Handy schon die
+   neue Version geladen hat.
+   ============================================================ */
+const APP_VERSION = "1.2.0";
+
 /* ============================================================
    KONFIGURATION — 1:1 aus der ursprünglichen Weather Engine
    (weather-engine/src/schema/weather.ts, providers/openMeteoClient.ts)
@@ -580,11 +595,9 @@ async function findBestWeatherWindow(location, range, models, profileWeights) {
 /* ============================================================
    REGENWAHRSCHEINLICHKEIT — stündliche Zeitreihe (kein Kartenradar,
    sondern eine aus den Rohdaten berechnete Regenwahrscheinlichkeits-
-   Timeline pro Stunde für einen Tag). Existiert als eigenes Werkzeug,
-   damit DeepSeek bei "wann regnet es" nicht selbst über mehrere
-   Einzelabfragen hinweg Zahlen zusammenreimen muss (genau das führte
-   vorher zu widersprüchlichen Antworten), sondern eine einzige,
-   in Code berechnete, in sich konsistente Antwort bekommt.
+   Timeline pro Stunde für einen Tag). Eigenes Werkzeug, damit DeepSeek
+   bei "wann regnet es" nicht selbst über mehrere Einzelabfragen hinweg
+   Zahlen zusammenreimen muss.
    ============================================================ */
 function rainLabel(pct) {
   if (pct === null) return "unbekannt";
@@ -761,20 +774,25 @@ function buildSystemPrompt(now = new Date()) {
   const get = (t) => parts.find((p) => p.type === t)?.value ?? "";
   const isoDate = `${get("year")}-${get("month")}-${get("day")}`;
   const weekday = get("weekday");
-  return `Du bist der KI-Wetteranalyst. Du verstehst natürliche Sprache und rufst passende Werkzeuge auf — du lieferst selbst NIEMALS Wetterwerte aus eigenem Wissen oder Vermutung.
+  return `Du bist der KI-Wetteranalyst. Du verstehst natürliche Sprache und rufst passende Werkzeuge auf.
+
+OBERSTE REGEL, ohne Ausnahme: Du lieferst NIEMALS eine konkrete Wetterangabe (Temperatur, Wind, Niederschlag, Bewölkung, Sicht, gefühlte Temperatur, o.ä.) aus eigenem Wissen, aus Erinnerung, "typischerweise für die Jahreszeit" oder als Schätzung. Jede Frage mit Wetterbezug beantwortest du ausschließlich mit dem Ergebnis eines Werkzeugaufrufs — auch wenn dir die Antwort trivial, offensichtlich oder aus dem Gespräch "schon bekannt" erscheint. Im Zweifel rufst du das Werkzeug lieber einmal zu oft auf, als zu raten. Du erfindest niemals Zahlen und tust dann so, als kämen sie aus einem Werkzeug.
+
+UHRZEIT: Nutzer müssen NIEMALS eine exakte Uhrzeit angeben. "Wie wird das Wetter morgen in Köln?" ist eine vollständige, völlig legitime Frage. Fehlt eine Uhrzeit, fragst du NICHT nach, sondern rufst das Werkzeug direkt mit der Standardzeit 12:00 auf, lieferst die Antwort für den Mittag und erwähnst kurz und beiläufig, dass sich das auf den Mittag bezieht (z.B. "gegen Mittag: ..."). Du kannst anbieten, auch andere Uhrzeiten oder ein ganzes Zeitfenster (find_best_weather_window) zu prüfen — das ist ein Angebot, keine Voraussetzung. Frage nur dann proaktiv nach, wenn der Nutzer selbst einen Zeitbezug andeutet, der unklar bleibt (z.B. "wann genau soll ich morgen losfahren" ohne jede weitere Eingrenzung).
 
 WICHTIG — heutiges Datum: Heute ist ${weekday}, der ${isoDate} (Zeitzone Europe/Berlin). Rechne relative Zeitangaben ("heute", "morgen", "übermorgen", "nächsten Montag", "in 3 Tagen" usw.) IMMER ausgehend von diesem Datum in ein exaktes Datum im Format YYYY-MM-DD um. Rate niemals ein Datum und nimm niemals ein anderes Jahr an als das oben genannte.
 
 Regeln, die du IMMER befolgst:
-1. Für jede Frage, die eine konkrete Wetterangabe braucht, rufst du zuerst das passende Werkzeug auf. Du beantwortest solche Fragen niemals aus dem Gedächtnis oder mit einer Schätzung.
-2. Wenn ein Werkzeug einen Fehler liefert, sagst du das dem Nutzer ehrlich — du füllst die Lücke nicht mit einer erfundenen Zahl.
+1. Für jede Frage, die eine konkrete Wetterangabe braucht, rufst du zuerst das passende Werkzeug auf. Du beantwortest solche Fragen niemals aus dem Gedächtnis oder mit einer Schätzung (siehe OBERSTE REGEL oben).
+2. Wenn ein Werkzeug einen Fehler liefert, sagst du das dem Nutzer sachlich und knapp — du füllst die Lücke nicht mit einer erfundenen Zahl. Keine übertriebene Entschuldigung, kein "mir ist ein Fehler unterlaufen" — nenne einfach kurz den Grund (z.B. Modell nicht verfügbar) und ggf. eine Alternative.
 3. Wenn ein Modell für den Zeitpunkt keine Daten hat (z.B. ICON-D2 deckt nur ~48h ab), erwähnst du das statt es zu verschweigen.
 4. Sichtweiten-Angaben sind eine Heuristik (0-100 Score + Label), keine exakte Kilometerzahl — stelle sie entsprechend vorsichtig dar.
 5. Der Konsens-/Confidence-Wert beschreibt, wie einig sich die Modelle sind — bei nur einem verfügbaren Modell ist das kein Beweis für hohe Sicherheit; sag das dann.
 6. Antworte in der Sprache der Nutzerfrage (Standard: Deutsch), knapp und konkret. Keine Rohdatentabellen, außer im Nerd-Modus explizit gewünscht.
 7. Bei Fragen ohne Wetterbezug antworte normal ohne Werkzeugaufruf.
-8. Für jede Frage zur Regenwahrscheinlichkeit ("wann regnet es", "wie hoch ist die Regenwahrscheinlichkeit", "Regenradar" o.ä.) nutzt du get_rain_probability (stündliche Zeitreihe, kein Kartenradar) statt get_weather für eine einzelne Uhrzeit — so bekommst du eine in sich konsistente Zahl pro Stunde statt Einzelschnappschüsse.
-9. WICHTIG bei Vergleichen über mehrere Tage (z.B. "welcher Tag ist am schlechtesten diese Woche"): rufe für JEDEN Tag ein eigenes, frisches Werkzeug auf — verlasse dich nie auf Zahlen aus einer früheren Antwort in diesem Gespräch, auch nicht aus deiner eigenen vorherigen Nachricht. Jede Zahl, die du nennst, muss wortwörtlich aus dem Tool-Ergebnis DIESER Runde stammen. Wenn du eine Zahl nicht in einem aktuellen Tool-Ergebnis wiederfindest, nenne sie nicht — rufe stattdessen das Werkzeug erneut auf. Widersprich dir nie selbst zwischen zwei Antworten zum selben Ort/Tag, ohne den Widerspruch zu erklären (z.B. unterschiedliche Uhrzeit am selben Tag).`;
+8. Du entschuldigst dich nicht präventiv und behauptest nicht, dir sei ein Fehler unterlaufen, wenn tatsächlich keiner passiert ist. Falls du tatsächlich etwas falsch gemacht hast, korrigierst du es schlicht und sachlich, ohne Drama.
+9. Für jede Frage zur Regenwahrscheinlichkeit ("wann regnet es", "wie hoch ist die Regenwahrscheinlichkeit", "Regenradar" o.ä.) nutzt du get_rain_probability (stündliche Zeitreihe, kein Kartenradar) statt get_weather für eine einzelne Uhrzeit — so bekommst du eine in sich konsistente Zahl pro Stunde statt Einzelschnappschüsse.
+10. WICHTIG bei Vergleichen über mehrere Tage (z.B. "welcher Tag ist am schlechtesten diese Woche"): rufe für JEDEN Tag ein eigenes, frisches Werkzeug auf — verlasse dich nie auf Zahlen aus einer früheren Antwort in diesem Gespräch, auch nicht aus deiner eigenen vorherigen Nachricht. Jede Zahl, die du nennst, muss wortwörtlich aus dem Tool-Ergebnis DIESER Runde stammen. Wenn du eine Zahl nicht in einem aktuellen Tool-Ergebnis wiederfindest, nenne sie nicht — rufe stattdessen das Werkzeug erneut auf. Widersprich dir nie selbst zwischen zwei Antworten zum selben Ort/Tag, ohne den Widerspruch zu erklären (z.B. unterschiedliche Uhrzeit am selben Tag).`;
 }
 
 /* ============================================================
@@ -841,6 +859,8 @@ const composer = document.getElementById("composer");
 const input = document.getElementById("input");
 const sendBtn = document.getElementById("send");
 const nerdToggle = document.getElementById("nerd");
+const brandSub = document.getElementById("brandSub");
+brandSub.textContent = `ICON · ECMWF · GFS · v${APP_VERSION}`;
 
 function safeGet(key) { try { return localStorage.getItem(key); } catch { return null; } }
 function safeSet(key, value) { try { localStorage.setItem(key, value); } catch {} }
@@ -943,7 +963,6 @@ composer.addEventListener("submit", async (e) => {
     const secs = Math.round((Date.now() - startedAt) / 1000);
     thinking.textContent = secs < 8 ? `… ${lastLabel} …` : `… ${lastLabel} … (${secs}s — bei mehrtägigen Vergleichen kann das etwas dauern)`;
   }, 1000);
-
   const OVERALL_TIMEOUT_MS = 120000;
   const timeoutPromise = new Promise((_, reject) =>
     setTimeout(() => reject(new Error(`Zeitüberschreitung nach ${OVERALL_TIMEOUT_MS / 1000}s. Bitte nochmal versuchen — eventuell die Frage aufteilen (z.B. einen Tag statt der ganzen Woche).`)), OVERALL_TIMEOUT_MS)
@@ -980,6 +999,20 @@ composer.addEventListener("submit", async (e) => {
 // Start
 if (safeGet(KEY_STORAGE)) closeGate(); else openGate();
 renderInitial();
+
+// Service Worker wieder entfernt (verursachte auf manchen Handys hängende,
+// veraltete Seitenstände). Alle vorhandenen Registrierungen + deren Cache
+// aktiv abmelden/leeren, damit alte Installationen sich selbst heilen.
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.getRegistrations().then((regs) => {
+    regs.forEach((reg) => reg.unregister());
+  }).catch(() => {});
+}
+if ("caches" in window) {
+  caches.keys().then((keys) => {
+    keys.forEach((k) => { if (k.startsWith("wetteranalyst")) caches.delete(k); });
+  }).catch(() => {});
+}
 </script>
 
 </body>
