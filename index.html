@@ -81,6 +81,7 @@
   .brand-mark { font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: 1.2rem; letter-spacing: 0.01em; }
   .brand-sub { font-size: 0.72rem; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; }
   .header-actions { display: flex; align-items: center; gap: 0.6rem; }
+  .version-badge { font-size: 0.68rem; color: var(--muted); background: var(--surface-2); border-radius: 999px; padding: 0.2rem 0.55rem; }
   .icon-btn {
     border: 1px solid var(--border); background: var(--surface); color: var(--muted);
     border-radius: 999px; width: 2.1rem; height: 2.1rem; display: flex; align-items: center; justify-content: center;
@@ -176,6 +177,7 @@
     <span class="brand-sub" id="brandSub">ICON · ECMWF · GFS</span>
   </div>
   <div class="header-actions">
+    <span class="version-badge mono" id="versionBadge" title="App-Version — hilft zu prüfen, ob dein Handy schon den neuesten Stand geladen hat"></span>
     <label class="toggle"><input type="checkbox" id="nerd" /> Nerd-Modus</label>
     <button class="icon-btn" id="resetKey" title="Schlüssel ändern / entfernen">⚙︎</button>
   </div>
@@ -200,7 +202,7 @@
    nach einem Deploy auf einen Blick sieht, ob das Handy schon die
    neue Version geladen hat.
    ============================================================ */
-const APP_VERSION = "1.2.0";
+const APP_VERSION = "1.2.1";
 
 /* ============================================================
    KONFIGURATION — 1:1 aus der ursprünglichen Weather Engine
@@ -791,7 +793,7 @@ Regeln, die du IMMER befolgst:
 6. Antworte in der Sprache der Nutzerfrage (Standard: Deutsch), knapp und konkret. Keine Rohdatentabellen, außer im Nerd-Modus explizit gewünscht.
 7. Bei Fragen ohne Wetterbezug antworte normal ohne Werkzeugaufruf.
 8. Du entschuldigst dich nicht präventiv und behauptest nicht, dir sei ein Fehler unterlaufen, wenn tatsächlich keiner passiert ist. Falls du tatsächlich etwas falsch gemacht hast, korrigierst du es schlicht und sachlich, ohne Drama.
-9. Für jede Frage zur Regenwahrscheinlichkeit ("wann regnet es", "wie hoch ist die Regenwahrscheinlichkeit", "Regenradar" o.ä.) nutzt du get_rain_probability (stündliche Zeitreihe, kein Kartenradar) statt get_weather für eine einzelne Uhrzeit — so bekommst du eine in sich konsistente Zahl pro Stunde statt Einzelschnappschüsse.
+9. Für jede Frage zur Regenwahrscheinlichkeit — auch Kapazitätsfragen wie "hast du einen Regenradar?" oder "gibt es ein Regenradar?" — antwortest du NIEMALS nur mit "nein, das habe ich nicht". Du rufst IMMER get_rain_probability auf und lieferst die stündliche Regenwahrscheinlichkeit als Antwort; dabei erwähnst du kurz und beiläufig, dass es sich um eine berechnete Zeitreihe (Prozent pro Stunde) statt einer Kartengrafik handelt — das ist eine Klarstellung, kein Grund, die eigentliche Frage unbeantwortet zu lassen. "Wann regnet es", "wie hoch ist die Regenwahrscheinlichkeit", "Regenradar" führen also IMMER zu einem Werkzeugaufruf, nie zu einer bloßen Absage.
 10. WICHTIG bei Vergleichen über mehrere Tage (z.B. "welcher Tag ist am schlechtesten diese Woche"): rufe für JEDEN Tag ein eigenes, frisches Werkzeug auf — verlasse dich nie auf Zahlen aus einer früheren Antwort in diesem Gespräch, auch nicht aus deiner eigenen vorherigen Nachricht. Jede Zahl, die du nennst, muss wortwörtlich aus dem Tool-Ergebnis DIESER Runde stammen. Wenn du eine Zahl nicht in einem aktuellen Tool-Ergebnis wiederfindest, nenne sie nicht — rufe stattdessen das Werkzeug erneut auf. Widersprich dir nie selbst zwischen zwei Antworten zum selben Ort/Tag, ohne den Widerspruch zu erklären (z.B. unterschiedliche Uhrzeit am selben Tag).`;
 }
 
@@ -861,6 +863,9 @@ const sendBtn = document.getElementById("send");
 const nerdToggle = document.getElementById("nerd");
 const brandSub = document.getElementById("brandSub");
 brandSub.textContent = `ICON · ECMWF · GFS · v${APP_VERSION}`;
+const versionBadge = document.getElementById("versionBadge");
+versionBadge.textContent = `v${APP_VERSION}`; // eigenes, immer sichtbares Badge — brand-sub wird auf schmalen
+                                                 // Bildschirmen per CSS ausgeblendet, dieses Badge nicht
 
 function safeGet(key) { try { return localStorage.getItem(key); } catch { return null; } }
 function safeSet(key, value) { try { localStorage.setItem(key, value); } catch {} }
