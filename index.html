@@ -4,10 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Wetteranalyst</title>
-<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
-<link rel="apple-touch-icon" sizes="180x180" href="icon-180.png">
-<meta name="theme-color" content="#10161d">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Work+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
   :root {
@@ -58,7 +54,6 @@
     color: var(--text);
     font-family: "Work Sans", -apple-system, BlinkMacSystemFont, sans-serif;
     height: 100vh;
-    height: 100dvh;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -87,7 +82,7 @@
   label.toggle { display: flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; color: var(--muted); cursor: pointer; user-select: none; }
   label.toggle input { accent-color: var(--accent); }
 
-  main { flex: 1; min-height: 0; overflow-y: auto; padding: 1rem 1rem 0.5rem; display: flex; flex-direction: column; gap: 0.7rem; }
+  main { flex: 1; overflow-y: auto; padding: 1rem 1rem 0.5rem; display: flex; flex-direction: column; gap: 0.7rem; }
   .hint-row {
     align-self: center; max-width: 34rem; text-align: center; color: var(--muted); font-size: 0.82rem;
     padding: 0.5rem 0.9rem; border: 1px dashed var(--border); border-radius: var(--radius);
@@ -98,6 +93,19 @@
   .msg.assistant.example { opacity: 0.82; }
   .msg.error { align-self: flex-start; background: var(--danger-bg); color: var(--danger); border: 1px solid var(--danger); }
   .example-tag { display: block; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 0.3rem; }
+
+  .toolpanel {
+    align-self: flex-start; max-width: 88%; border: 1px solid var(--border); border-radius: 10px;
+    background: var(--surface-2); overflow: hidden;
+  }
+  .toolpanel summary {
+    cursor: pointer; padding: 0.45rem 0.75rem; font-size: 0.76rem; color: var(--muted);
+    display: flex; align-items: center; gap: 0.4rem;
+  }
+  .toolpanel summary::-webkit-details-marker { display: none; }
+  .toolpanel summary:before { content: "▸"; display: inline-block; transition: transform 0.15s; }
+  .toolpanel[open] summary:before { transform: rotate(90deg); }
+  .toolpanel pre { margin: 0; padding: 0 0.75rem 0.7rem; font-size: 0.72rem; white-space: pre-wrap; word-break: break-word; color: var(--text); max-height: 16rem; overflow-y: auto; }
 
   form#composer {
     display: flex; gap: 0.6rem; padding: 0.8rem 1rem calc(0.8rem + env(safe-area-inset-bottom));
@@ -136,8 +144,8 @@
   [hidden] { display: none !important; }
 
   @media (max-width: 480px) {
-    .msg { max-width: 90%; }
-    .brand-sub { font-size: 0.62rem; }
+    .msg, .toolpanel { max-width: 90%; }
+    .brand-sub { display: none; }
   }
 </style>
 </head>
@@ -157,9 +165,10 @@
 <header>
   <div class="brand">
     <span class="brand-mark">🌤️ Wetteranalyst</span>
-    <span class="brand-sub" id="brandSub">ICON · ECMWF · GFS</span>
+    <span class="brand-sub">ICON · ECMWF · GFS</span>
   </div>
   <div class="header-actions">
+    <label class="toggle"><input type="checkbox" id="nerd" /> Nerd-Modus</label>
     <button class="icon-btn" id="resetKey" title="Schlüssel ändern / entfernen">⚙︎</button>
   </div>
 </header>
@@ -172,14 +181,6 @@
 </form>
 
 <script type="module">
-/* ============================================================
-   VERSION — bei jedem Update hochzählen. Wird im Header angezeigt
-   und an den Service Worker durchgereicht (siehe unten), damit man
-   nach einem Deploy auf einen Blick sieht, ob das Handy schon die
-   neue Version geladen hat.
-   ============================================================ */
-const APP_VERSION = "1.5.0";
-
 /* ============================================================
    KONFIGURATION — 1:1 aus der ursprünglichen Weather Engine
    (weather-engine/src/schema/weather.ts, providers/openMeteoClient.ts)
@@ -570,6 +571,64 @@ async function findBestWeatherWindow(location, range, models, profileWeights) {
   return { location, range, profileWeights, rankedHours, bestHour: rankedHours[0] ?? null, bestContiguous3h, modelsUsed, notes };
 }
 
+/* ============================================================
+   REGENWAHRSCHEINLICHKEIT — stündliche Zeitreihe (kein Kartenradar,
+   sondern eine aus den Rohdaten berechnete Regenwahrscheinlichkeits-
+   Timeline pro Stunde für einen Tag). Existiert als eigenes Werkzeug,
+   damit DeepSeek bei "wann regnet es" nicht selbst über mehrere
+   Einzelabfragen hinweg Zahlen zusammenreimen muss (genau das führte
+   vorher zu widersprüchlichen Antworten), sondern eine einzige,
+   in Code berechnete, in sich konsistente Antwort bekommt.
+   ============================================================ */
+function rainLabel(pct) {
+  if (pct === null) return "unbekannt";
+  if (pct < 20) return "trocken";
+  if (pct < 50) return "geringes Risiko";
+  if (pct < 75) return "wahrscheinlich";
+  return "hohes Risiko";
+}
+function buildRainTimeline(perModelHours, start, end) {
+  const byHour = new Map();
+  for (const hours of perModelHours) for (const h of hours) {
+    if (!inRange(h.validTime, start, end)) continue;
+    const key = toHourKey(h.validTime);
+    const bucket = byHour.get(key) ?? [];
+    bucket.push(h); byHour.set(key, bucket);
+  }
+  return [...byHour.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([time, records]) => {
+    const probValues = records.map((r) => r.precipitationProbability).filter((v) => typeof v === "number");
+    const mmValues = records.map((r) => r.precipitation).filter((v) => typeof v === "number");
+    const probabilityPct = probValues.length ? Math.round(mean(probValues)) : null;
+    const precipitationMm = mmValues.length ? Number(mean(mmValues).toFixed(2)) : null;
+    return { time, probabilityPct, precipitationMm, modelsWithData: records.length, label: rainLabel(probabilityPct) };
+  });
+}
+function summarizeRainTimeline(rows) {
+  const withData = rows.filter((r) => r.probabilityPct !== null);
+  if (withData.length === 0) return { maxProbabilityPct: null, hoursAboveThreshold: 0, firstRainHour: null, lastRainHour: null };
+  const maxProbabilityPct = Math.max(...withData.map((r) => r.probabilityPct));
+  const rainHours = withData.filter((r) => r.probabilityPct >= 50);
+  return { maxProbabilityPct, hoursAboveThreshold: rainHours.length, firstRainHour: rainHours[0]?.time ?? null, lastRainHour: rainHours[rainHours.length - 1]?.time ?? null };
+}
+async function runRainProbabilityQuery(input) {
+  const location = await resolveLocation(input.location);
+  const startIso = zonedTimeToUtcIso(input.date, "00:00", input.timeZone);
+  const endIso = zonedTimeToUtcIso(input.date, "23:00", input.timeZone);
+  const notes = [], modelsUsed = [], perModelHours = [];
+  for (const model of input.models) {
+    const forecastDays = model === "icon_d2" ? 2 : 10;
+    try {
+      const hours = await fetchOpenMeteoHourly({ model, lat: location.lat, lon: location.lon, forecastDays }, new Date().toISOString());
+      perModelHours.push(hours); modelsUsed.push(model);
+    } catch (err) { notes.push(`${model}: ${err.message}`); }
+  }
+  if (perModelHours.length === 0) return { location, date: input.date, timeZone: input.timeZone, hourly: [], summary: null, modelsUsed: [], notes: [...notes, "Kein Modell hat Daten für diesen Tag geliefert."] };
+  if (input.models.includes("icon_d2") && !modelsUsed.includes("icon_d2")) notes.push("ICON-D2 deckt nur ca. 48h ab und war für diesen Tag nicht verfügbar.");
+  const hourly = buildRainTimeline(perModelHours, startIso, endIso);
+  const summary = summarizeRainTimeline(hourly);
+  return { location, date: input.date, timeZone: input.timeZone, hourly, summary, modelsUsed, notes };
+}
+
 function shapeVisibilityResponse(result) {
   return {
     location: result.location, requestedTime: result.requestedTime,
@@ -594,6 +653,13 @@ function validateInstant(args) {
   const models = Array.isArray(args.models) && args.models.length ? args.models.filter((m) => MODEL_IDS.includes(m)) : DEFAULT_MODELS;
   const timeZone = typeof args.timeZone === "string" && args.timeZone ? args.timeZone : "Europe/Berlin";
   return { location: args.location, date: args.date, time, models: models.length ? models : DEFAULT_MODELS, timeZone };
+}
+function validateRainProbability(args) {
+  if (typeof args.location !== "string" || !args.location.trim()) throw new Error("'location' fehlt oder ist leer.");
+  if (typeof args.date !== "string" || !DATE_RE.test(args.date)) throw new Error("'date' muss im Format YYYY-MM-DD sein.");
+  const models = Array.isArray(args.models) && args.models.length ? args.models.filter((m) => MODEL_IDS.includes(m)) : DEFAULT_MODELS;
+  const timeZone = typeof args.timeZone === "string" && args.timeZone ? args.timeZone : "Europe/Berlin";
+  return { location: args.location, date: args.date, models: models.length ? models : DEFAULT_MODELS, timeZone };
 }
 function validateBestWindow(args) {
   if (typeof args.location !== "string" || !args.location.trim()) throw new Error("'location' fehlt oder ist leer.");
@@ -637,6 +703,9 @@ const DEEPSEEK_TOOLS = [
   { type: "function", function: { name: "get_mountain_weather", description: "Wie get_weather, mit Fokus auf Berg-/Höhenlagen.", parameters: instantParameters("Uhrzeit HH:00. Weglassen = 12:00.") } },
   { type: "function", function: { name: "get_visibility", description: "Nur die Fernsicht-Einschätzung (3 Ebenen).", parameters: instantParameters("Uhrzeit HH:00. Weglassen = 12:00.") } },
   { type: "function", function: { name: "get_model_consensus", description: "Nur Modell-Konsens und Confidence-Score.", parameters: instantParameters("Uhrzeit HH:00. Weglassen = 12:00.") } },
+  { type: "function", function: { name: "get_rain_probability", description: "Regenwahrscheinlichkeit im Tagesverlauf als stündliche Zeitreihe (kein Kartenradar, sondern aus den Rohdaten aller Modelle berechnet: Prozent pro Stunde, ab wann/bis wann es wahrscheinlich regnet). Nutze DIESES Werkzeug für jede Frage nach Regenwahrscheinlichkeit, 'wann regnet es', 'Regenradar' o.ä. — nicht get_weather für eine einzelne Uhrzeit.", parameters: {
+    type: "object", properties: { location: LOCATION_PARAM, date: DATE_PARAM, models: MODELS_PARAM, timeZone: TIME_ZONE_PARAM }, required: ["location", "date"],
+  } } },
   { type: "function", function: { name: "find_best_weather_window", description: "Bestes Wetterfenster innerhalb eines Zeitraums an einem Tag.", parameters: {
     type: "object", properties: {
       location: LOCATION_PARAM, date: DATE_PARAM,
@@ -664,6 +733,8 @@ async function executeTool(name, argsJson) {
         return shapeConsensusResponse(await runInstantQuery(validateInstant(args)));
       case "find_best_weather_window":
         return await runBestWindowQuery(validateBestWindow(args));
+      case "get_rain_probability":
+        return await runRainProbabilityQuery(validateRainProbability(args));
       default:
         return { error: `Unbekanntes Tool: "${name}".` };
     }
@@ -684,34 +755,43 @@ function buildSystemPrompt(now = new Date()) {
   const get = (t) => parts.find((p) => p.type === t)?.value ?? "";
   const isoDate = `${get("year")}-${get("month")}-${get("day")}`;
   const weekday = get("weekday");
-  return `Du bist der KI-Wetteranalyst. Du verstehst natürliche Sprache und rufst passende Werkzeuge auf.
-
-OBERSTE REGEL, ohne Ausnahme: Du lieferst NIEMALS eine konkrete Wetterangabe (Temperatur, Wind, Niederschlag, Bewölkung, Sicht, gefühlte Temperatur, o.ä.) aus eigenem Wissen, aus Erinnerung, "typischerweise für die Jahreszeit" oder als Schätzung. Jede Frage mit Wetterbezug beantwortest du ausschließlich mit dem Ergebnis eines Werkzeugaufrufs — auch wenn dir die Antwort trivial, offensichtlich oder aus dem Gespräch "schon bekannt" erscheint. Im Zweifel rufst du das Werkzeug lieber einmal zu oft auf, als zu raten. Du erfindest niemals Zahlen und tust dann so, als kämen sie aus einem Werkzeug.
-
-UHRZEIT: Nutzer müssen NIEMALS eine exakte Uhrzeit angeben. "Wie wird das Wetter morgen in Köln?" ist eine vollständige, völlig legitime Frage. Fehlt eine Uhrzeit, fragst du NICHT nach, sondern rufst das Werkzeug direkt mit der Standardzeit 12:00 auf, lieferst die Antwort für den Mittag und erwähnst kurz und beiläufig, dass sich das auf den Mittag bezieht (z.B. "gegen Mittag: ..."). Du kannst anbieten, auch andere Uhrzeiten oder ein ganzes Zeitfenster (find_best_weather_window) zu prüfen — das ist ein Angebot, keine Voraussetzung. Frage nur dann proaktiv nach, wenn der Nutzer selbst einen Zeitbezug andeutet, der unklar bleibt (z.B. "wann genau soll ich morgen losfahren" ohne jede weitere Eingrenzung).
+  return `Du bist der KI-Wetteranalyst. Du verstehst natürliche Sprache und rufst passende Werkzeuge auf — du lieferst selbst NIEMALS Wetterwerte aus eigenem Wissen oder Vermutung.
 
 WICHTIG — heutiges Datum: Heute ist ${weekday}, der ${isoDate} (Zeitzone Europe/Berlin). Rechne relative Zeitangaben ("heute", "morgen", "übermorgen", "nächsten Montag", "in 3 Tagen" usw.) IMMER ausgehend von diesem Datum in ein exaktes Datum im Format YYYY-MM-DD um. Rate niemals ein Datum und nimm niemals ein anderes Jahr an als das oben genannte.
 
 Regeln, die du IMMER befolgst:
-1. Für jede Frage, die eine konkrete Wetterangabe braucht, rufst du zuerst das passende Werkzeug auf. Du beantwortest solche Fragen niemals aus dem Gedächtnis oder mit einer Schätzung (siehe OBERSTE REGEL oben).
-2. Wenn ein Werkzeug einen Fehler liefert, sagst du das dem Nutzer sachlich und knapp — du füllst die Lücke nicht mit einer erfundenen Zahl. Keine übertriebene Entschuldigung, kein "mir ist ein Fehler unterlaufen" — nenne einfach kurz den Grund (z.B. Modell nicht verfügbar) und ggf. eine Alternative.
+1. Für jede Frage, die eine konkrete Wetterangabe braucht, rufst du zuerst das passende Werkzeug auf. Du beantwortest solche Fragen niemals aus dem Gedächtnis oder mit einer Schätzung.
+2. Wenn ein Werkzeug einen Fehler liefert, sagst du das dem Nutzer ehrlich — du füllst die Lücke nicht mit einer erfundenen Zahl.
 3. Wenn ein Modell für den Zeitpunkt keine Daten hat (z.B. ICON-D2 deckt nur ~48h ab), erwähnst du das statt es zu verschweigen.
 4. Sichtweiten-Angaben sind eine Heuristik (0-100 Score + Label), keine exakte Kilometerzahl — stelle sie entsprechend vorsichtig dar.
 5. Der Konsens-/Confidence-Wert beschreibt, wie einig sich die Modelle sind — bei nur einem verfügbaren Modell ist das kein Beweis für hohe Sicherheit; sag das dann.
 6. Antworte in der Sprache der Nutzerfrage (Standard: Deutsch), knapp und konkret. Keine Rohdatentabellen, außer im Nerd-Modus explizit gewünscht.
 7. Bei Fragen ohne Wetterbezug antworte normal ohne Werkzeugaufruf.
-8. Du entschuldigst dich nicht präventiv und behauptest nicht, dir sei ein Fehler unterlaufen, wenn tatsächlich keiner passiert ist. Falls du tatsächlich etwas falsch gemacht hast, korrigierst du es schlicht und sachlich, ohne Drama.`;
+8. Für jede Frage zur Regenwahrscheinlichkeit ("wann regnet es", "wie hoch ist die Regenwahrscheinlichkeit", "Regenradar" o.ä.) nutzt du get_rain_probability (stündliche Zeitreihe, kein Kartenradar) statt get_weather für eine einzelne Uhrzeit — so bekommst du eine in sich konsistente Zahl pro Stunde statt Einzelschnappschüsse.
+9. WICHTIG bei Vergleichen über mehrere Tage (z.B. "welcher Tag ist am schlechtesten diese Woche"): rufe für JEDEN Tag ein eigenes, frisches Werkzeug auf — verlasse dich nie auf Zahlen aus einer früheren Antwort in diesem Gespräch, auch nicht aus deiner eigenen vorherigen Nachricht. Jede Zahl, die du nennst, muss wortwörtlich aus dem Tool-Ergebnis DIESER Runde stammen. Wenn du eine Zahl nicht in einem aktuellen Tool-Ergebnis wiederfindest, nenne sie nicht — rufe stattdessen das Werkzeug erneut auf. Widersprich dir nie selbst zwischen zwei Antworten zum selben Ort/Tag, ohne den Widerspruch zu erklären (z.B. unterschiedliche Uhrzeit am selben Tag).`;
 }
 
 /* ============================================================
    DEEPSEEK CLIENT + TOOL-CALLING-LOOP — deepseek/client.ts + chatLoop.ts
    ============================================================ */
+const DEEPSEEK_TIMEOUT_MS = 45000;
 async function callDeepSeek(apiKey, messages) {
-  const res = await fetch("https://api.deepseek.com/chat/completions", {
-    method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({ model: "deepseek-chat", messages, tools: DEEPSEEK_TOOLS, tool_choice: "auto", temperature: 0.2 }),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), DEEPSEEK_TIMEOUT_MS);
+  let res;
+  try {
+    res = await fetch("https://api.deepseek.com/chat/completions", {
+      method: "POST",
+      signal: controller.signal,
+      headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({ model: "deepseek-chat", messages, tools: DEEPSEEK_TOOLS, tool_choice: "auto", temperature: 0.2 }),
+    });
+  } catch (err) {
+    if (err.name === "AbortError") throw new Error(`DeepSeek hat nach ${DEEPSEEK_TIMEOUT_MS / 1000}s nicht geantwortet (Zeitüberschreitung). Bitte nochmal versuchen — bei Fragen zu vielen Tagen auf einmal hilft es, die Frage aufzuteilen.`);
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
   if (!res.ok) {
     const bodyText = await res.text().catch(() => "");
     throw new Error(`DeepSeek API antwortete mit ${res.status}: ${bodyText.slice(0, 300)}`);
@@ -754,18 +834,16 @@ const log = document.getElementById("log");
 const composer = document.getElementById("composer");
 const input = document.getElementById("input");
 const sendBtn = document.getElementById("send");
-const brandSub = document.getElementById("brandSub");
-brandSub.textContent = `ICON · ECMWF · GFS · v${APP_VERSION}`;
+const nerdToggle = document.getElementById("nerd");
 
 function safeGet(key) { try { return localStorage.getItem(key); } catch { return null; } }
 function safeSet(key, value) { try { localStorage.setItem(key, value); } catch {} }
 function safeRemove(key) { try { localStorage.removeItem(key); } catch {} }
 
-// Chatverlauf wird ABSICHTLICH NICHT gespeichert — jeder App-Start beginnt
-// mit einem neuen, leeren Chat. (Der API-Schlüssel bleibt trotzdem gespeichert.)
-function loadHistory() { return []; }
-function saveHistory() { /* bewusst deaktiviert — kein Verlauf wird gespeichert */ }
-safeRemove(HISTORY_STORAGE); // alten, noch gespeicherten Verlauf einmalig entfernen
+function loadHistory() {
+  try { return JSON.parse(safeGet(HISTORY_STORAGE) || "[]"); } catch { return []; }
+}
+function saveHistory(history) { safeSet(HISTORY_STORAGE, JSON.stringify(history.slice(-40))); }
 
 let history = loadHistory();
 
@@ -787,6 +865,21 @@ function renderMessage(role, text, opts = {}) {
   log.appendChild(el);
   log.scrollTop = log.scrollHeight;
   return el;
+}
+
+function renderToolPanel(toolCalls) {
+  if (!toolCalls || toolCalls.length === 0) return;
+  const details = document.createElement("details");
+  details.className = "toolpanel";
+  const summary = document.createElement("summary");
+  summary.textContent = `${toolCalls.length} Werkzeugaufruf${toolCalls.length > 1 ? "e" : ""} (Nerd-Modus)`;
+  const pre = document.createElement("pre");
+  pre.className = "mono";
+  pre.textContent = toolCalls.map((c) => `▸ ${c.name}(${c.arguments})\n${JSON.stringify(c.result, null, 2)}`).join("\n\n");
+  details.appendChild(summary);
+  details.appendChild(pre);
+  log.appendChild(details);
+  log.scrollTop = log.scrollHeight;
 }
 
 function renderInitial() {
@@ -838,16 +931,33 @@ composer.addEventListener("submit", async (e) => {
   sendBtn.disabled = true;
 
   const thinking = renderMessage("assistant", "… denkt nach …");
+  const startedAt = Date.now();
+  let lastLabel = "denkt nach";
+  const ticker = setInterval(() => {
+    const secs = Math.round((Date.now() - startedAt) / 1000);
+    thinking.textContent = secs < 8 ? `… ${lastLabel} …` : `… ${lastLabel} … (${secs}s — bei mehrtägigen Vergleichen kann das etwas dauern)`;
+  }, 1000);
+
+  const OVERALL_TIMEOUT_MS = 120000;
+  const timeoutPromise = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error(`Zeitüberschreitung nach ${OVERALL_TIMEOUT_MS / 1000}s. Bitte nochmal versuchen — eventuell die Frage aufteilen (z.B. einen Tag statt der ganzen Woche).`)), OVERALL_TIMEOUT_MS)
+  );
 
   try {
-    const result = await runChatTurn(apiKey, history.slice(0, -1), message, (toolName) => {
-      thinking.textContent = `… ruft ${toolName} auf …`;
-    });
+    const result = await Promise.race([
+      runChatTurn(apiKey, history.slice(0, -1), message, (toolName) => {
+        lastLabel = `ruft ${toolName} auf`;
+      }),
+      timeoutPromise,
+    ]);
+    clearInterval(ticker);
     thinking.remove();
     renderMessage("assistant", result.reply || "(keine Antwort erhalten)");
+    if (nerdToggle.checked) renderToolPanel(result.toolCalls);
     history.push({ role: "assistant", content: result.reply });
     saveHistory(history);
   } catch (err) {
+    clearInterval(ticker);
     thinking.remove();
     let msg = err.message || String(err);
     if (msg.includes("Failed to fetch") || msg.includes("NetworkError")) {
@@ -864,20 +974,6 @@ composer.addEventListener("submit", async (e) => {
 // Start
 if (safeGet(KEY_STORAGE)) closeGate(); else openGate();
 renderInitial();
-
-// Service Worker wieder entfernt (verursachte auf manchen Handys hängende,
-// veraltete Seitenstände). Alle vorhandenen Registrierungen + deren Cache
-// aktiv abmelden/leeren, damit alte Installationen sich selbst heilen.
-if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.getRegistrations().then((regs) => {
-    regs.forEach((reg) => reg.unregister());
-  }).catch(() => {});
-}
-if ("caches" in window) {
-  caches.keys().then((keys) => {
-    keys.forEach((k) => { if (k.startsWith("wetteranalyst")) caches.delete(k); });
-  }).catch(() => {});
-}
 </script>
 
 </body>
