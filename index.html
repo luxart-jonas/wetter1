@@ -202,7 +202,7 @@
    nach einem Deploy auf einen Blick sieht, ob das Handy schon die
    neue Version geladen hat.
    ============================================================ */
-const APP_VERSION = "1.3.0";
+const APP_VERSION = "1.4.0";
 
 /* ============================================================
    KONFIGURATION — 1:1 aus der ursprünglichen Weather Engine
@@ -631,34 +631,68 @@ function summarizeRainTimeline(rows) {
   const rainHours = withData.filter((r) => r.probabilityPct >= 50);
   return { maxProbabilityPct, hoursAboveThreshold: rainHours.length, firstRainHour: rainHours[0]?.time ?? null, lastRainHour: rainHours[rainHours.length - 1]?.time ?? null };
 }
+/* Holt die Modell-Stunden für einen Tag PARALLEL (statt nacheinander) —
+   wird sowohl vom eigenständigen get_rain_probability-Werkzeug als auch
+   automatisch von JEDER Wetteranalyse genutzt (siehe attachRainOutlook
+   unten), darf also keine unnötige Extra-Wartezeit verursachen. */
+async function fetchModelsForRain(location, models) {
+  const settled = await Promise.allSettled(
+    models.map((model) => {
+      const forecastDays = model === "icon_d2" ? 2 : 10;
+      return fetchOpenMeteoHourly({ model, lat: location.lat, lon: location.lon, forecastDays }, new Date().toISOString()).then((hours) => ({ model, hours }));
+    })
+  );
+  const notes = [], modelsUsed = [], perModelHours = [];
+  settled.forEach((s, i) => {
+    if (s.status === "fulfilled") { perModelHours.push(s.value.hours); modelsUsed.push(s.value.model); }
+    else notes.push(`${models[i]}: ${s.reason?.message ?? s.reason}`);
+  });
+  if (models.includes("icon_d2") && !modelsUsed.includes("icon_d2")) notes.push("ICON-D2 deckt nur ca. 48h ab und war für diesen Tag nicht verfügbar.");
+  return { perModelHours, modelsUsed, notes };
+}
 async function runRainProbabilityQuery(input) {
   const location = await resolveLocation(input.location);
   const startIso = zonedTimeToUtcIso(input.date, "00:00", input.timeZone);
   const endIso = zonedTimeToUtcIso(input.date, "23:00", input.timeZone);
-  const notes = [], modelsUsed = [], perModelHours = [];
-  for (const model of input.models) {
-    const forecastDays = model === "icon_d2" ? 2 : 10;
-    try {
-      const hours = await fetchOpenMeteoHourly({ model, lat: location.lat, lon: location.lon, forecastDays }, new Date().toISOString());
-      perModelHours.push(hours); modelsUsed.push(model);
-    } catch (err) { notes.push(`${model}: ${err.message}`); }
-  }
+  const { perModelHours, modelsUsed, notes } = await fetchModelsForRain(location, input.models);
   if (perModelHours.length === 0) return { location, date: input.date, timeZone: input.timeZone, hourly: [], summary: null, modelsUsed: [], notes: [...notes, "Kein Modell hat Daten für diesen Tag geliefert."] };
-  if (input.models.includes("icon_d2") && !modelsUsed.includes("icon_d2")) notes.push("ICON-D2 deckt nur ca. 48h ab und war für diesen Tag nicht verfügbar.");
   const hourly = buildRainTimeline(perModelHours, startIso, endIso);
   const summary = summarizeRainTimeline(hourly);
   return { location, date: input.date, timeZone: input.timeZone, hourly, summary, modelsUsed, notes };
+}
+
+/* Wird automatisch an JEDE Wetteranalyse angehängt (get_weather,
+   find_best_weather_window, ...), damit der Nutzer nie separat nach
+   Regenwahrscheinlichkeit fragen muss — sie ist immer schon dabei.
+   isShortTerm: true = Vorhersage beginnt innerhalb ~48h ab jetzt (dann
+   ist die stündliche Auflösung verlässlich genug, um sie im Detail
+   auszugeben); false = weiter in der Zukunft, dann reicht laut Nutzer-
+   Wunsch eine knappe Zusammenfassung statt jeder einzelnen Stunde. */
+async function attachRainOutlook(location, date, timeZone, models, referenceIsoTime) {
+  try {
+    const startIso = zonedTimeToUtcIso(date, "00:00", timeZone);
+    const endIso = zonedTimeToUtcIso(date, "23:00", timeZone);
+    const { perModelHours, modelsUsed, notes } = await fetchModelsForRain(location, models);
+    if (perModelHours.length === 0) return { hourly: [], summary: null, modelsUsed: [], notes: [...notes, "Kein Modell hat Regendaten für diesen Tag geliefert."], isShortTerm: true };
+    const hourly = buildRainTimeline(perModelHours, startIso, endIso);
+    const summary = summarizeRainTimeline(hourly);
+    const hoursAhead = (new Date(referenceIsoTime).getTime() - Date.now()) / 3600000;
+    const isShortTerm = hoursAhead <= 48;
+    return { hourly, summary, modelsUsed, notes, isShortTerm };
+  } catch (err) {
+    return { hourly: [], summary: null, modelsUsed: [], notes: [`Regenwahrscheinlichkeit konnte nicht berechnet werden: ${err.message}`], isShortTerm: true };
+  }
 }
 
 function shapeVisibilityResponse(result) {
   return {
     location: result.location, requestedTime: result.requestedTime,
     perModel: result.models.map((m) => ({ model: m.model, status: m.status, modelVisibilityM: m.computed?.visibility.modelVisibilityM ?? null, hazeRisk: m.computed?.visibility.hazeRisk ?? null, heuristicScore: m.computed?.visibility.heuristicScore ?? null, heuristicLabel: m.computed?.visibility.heuristicLabel ?? null })),
-    notes: result.notes,
+    notes: result.notes, rainOutlook: result.rainOutlook,
   };
 }
 function shapeConsensusResponse(result) {
-  return { location: result.location, requestedTime: result.requestedTime, consensus: result.consensus, confidenceTotal: result.confidenceTotal, notes: result.notes };
+  return { location: result.location, requestedTime: result.requestedTime, consensus: result.consensus, confidenceTotal: result.confidenceTotal, notes: result.notes, rainOutlook: result.rainOutlook };
 }
 
 /* ============================================================
@@ -696,14 +730,22 @@ function validateBestWindow(args) {
 async function runInstantQuery(input) {
   const location = await resolveLocation(input.location);
   const isoTime = zonedTimeToUtcIso(input.date, input.time, input.timeZone);
-  return queryWeather(location, { kind: "instant", time: isoTime }, input.models);
+  const [result, rainOutlook] = await Promise.all([
+    queryWeather(location, { kind: "instant", time: isoTime }, input.models),
+    attachRainOutlook(location, input.date, input.timeZone, input.models, isoTime),
+  ]);
+  return { ...result, rainOutlook };
 }
 async function runBestWindowQuery(input) {
   const location = await resolveLocation(input.location);
   const startIso = zonedTimeToUtcIso(input.date, input.timeRange.start, input.timeZone);
   const endIso = zonedTimeToUtcIso(input.date, input.timeRange.end, input.timeZone);
   const weights = DEFAULT_PROFILES[input.profile] ?? DEFAULT_PROFILES.normal;
-  return findBestWeatherWindow(location, { start: startIso, end: endIso }, input.models, weights);
+  const [result, rainOutlook] = await Promise.all([
+    findBestWeatherWindow(location, { start: startIso, end: endIso }, input.models, weights),
+    attachRainOutlook(location, input.date, input.timeZone, input.models, startIso),
+  ]);
+  return { ...result, rainOutlook };
 }
 
 /* ============================================================
@@ -794,7 +836,8 @@ Regeln, die du IMMER befolgst:
 7. Bei Fragen ohne Wetterbezug antworte normal ohne Werkzeugaufruf.
 8. Du entschuldigst dich nicht präventiv und behauptest nicht, dir sei ein Fehler unterlaufen, wenn tatsächlich keiner passiert ist. Falls du tatsächlich etwas falsch gemacht hast, korrigierst du es schlicht und sachlich, ohne Drama.
 9. Für jede Frage zur Regenwahrscheinlichkeit — auch Kapazitätsfragen wie "hast du einen Regenradar?" oder "gibt es ein Regenradar?" — antwortest du NIEMALS nur mit "nein, das habe ich nicht". Du rufst IMMER get_rain_probability auf und lieferst die stündliche Regenwahrscheinlichkeit als Antwort; dabei erwähnst du kurz und beiläufig, dass es sich um eine berechnete Zeitreihe (Prozent pro Stunde) statt einer Kartengrafik handelt — das ist eine Klarstellung, kein Grund, die eigentliche Frage unbeantwortet zu lassen. "Wann regnet es", "wie hoch ist die Regenwahrscheinlichkeit", "Regenradar" führen also IMMER zu einem Werkzeugaufruf, nie zu einer bloßen Absage.
-10. WICHTIG bei Vergleichen über mehrere Tage (z.B. "welcher Tag ist am schlechtesten diese Woche"): rufe für JEDEN Tag ein eigenes, frisches Werkzeug auf — verlasse dich nie auf Zahlen aus einer früheren Antwort in diesem Gespräch, auch nicht aus deiner eigenen vorherigen Nachricht. Jede Zahl, die du nennst, muss wortwörtlich aus dem Tool-Ergebnis DIESER Runde stammen. Wenn du eine Zahl nicht in einem aktuellen Tool-Ergebnis wiederfindest, nenne sie nicht — rufe stattdessen das Werkzeug erneut auf. Widersprich dir nie selbst zwischen zwei Antworten zum selben Ort/Tag, ohne den Widerspruch zu erklären (z.B. unterschiedliche Uhrzeit am selben Tag).`;
+10. WICHTIG bei Vergleichen über mehrere Tage (z.B. "welcher Tag ist am schlechtesten diese Woche"): rufe für JEDEN Tag ein eigenes, frisches Werkzeug auf — verlasse dich nie auf Zahlen aus einer früheren Antwort in diesem Gespräch, auch nicht aus deiner eigenen vorherigen Nachricht. Jede Zahl, die du nennst, muss wortwörtlich aus dem Tool-Ergebnis DIESER Runde stammen. Wenn du eine Zahl nicht in einem aktuellen Tool-Ergebnis wiederfindest, nenne sie nicht — rufe stattdessen das Werkzeug erneut auf. Widersprich dir nie selbst zwischen zwei Antworten zum selben Ort/Tag, ohne den Widerspruch zu erklären (z.B. unterschiedliche Uhrzeit am selben Tag).
+11. JEDE Wetteranalyse (get_weather, get_hourly_weather, get_weather_details, compare_models, get_mountain_weather, get_visibility, get_model_consensus, find_best_weather_window) liefert automatisch ein Feld "rainOutlook" mit — eine Regenwahrscheinlichkeits-Übersicht für den ganzen Tag, du musst dafür NICHT extra get_rain_probability aufrufen. Baue rainOutlook IMMER kurz mit in deine Antwort ein, auch wenn nicht explizit nach Regen gefragt wurde — ein bis zwei Sätze reichen. Nutze rainOutlook.isShortTerm, um die Detailtiefe zu wählen: ist isShortTerm true (Vorhersage beginnt innerhalb der nächsten ~48h), nenne den stündlichen Verlauf konkret (z.B. "ab 15 Uhr steigt das Risiko auf 70%, gegen 19 Uhr wieder trocken") anhand von rainOutlook.hourly. Ist isShortTerm false (weiter in der Zukunft), fasse nur knapp zusammen (rainOutlook.summary: höchste Wahrscheinlichkeit, ungefährer Zeitraum) statt jede Stunde aufzuzählen — bei größerer Entfernung ist stündliche Genauigkeit ohnehin nicht sinnvoll. Ist rainOutlook.hourly leer, erwähne kurz, dass dafür keine Daten verfügbar waren, statt es zu verschweigen. get_rain_probability bleibt nutzbar, wenn der Nutzer GEZIELT nur die Regenwahrscheinlichkeit im Detail sehen will, ohne die übrige Wetteranalyse.`;
 }
 
 /* ============================================================
