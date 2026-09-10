@@ -22,6 +22,12 @@
     --danger: #8a2f2f;
     --danger-bg: #f6e6e4;
     --radius: 14px;
+    /* Status-Farben (Confidence/Sichtweite-Einschätzung) — bewusst fest,
+       nicht Teil des Themes: gilt identisch in hell und dunkel (siehe
+       dataviz-Skill, "Status palette — fixed, never themed"). */
+    --status-good: #0ca30c;
+    --status-warning: #fab219;
+    --status-critical: #d03b3b;
     color-scheme: light dark;
   }
   @media (prefers-color-scheme: dark) {
@@ -90,6 +96,45 @@
   .icon-btn:hover { border-color: var(--accent); color: var(--accent); }
   label.toggle { display: flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; color: var(--muted); cursor: pointer; user-select: none; }
   label.toggle input { accent-color: var(--accent); }
+
+  /* ============================================================
+     ÜBERSICHT — immer sichtbares Dashboard zwischen Header und Chat.
+     Füllt/aktualisiert sich automatisch nach jeder Wetteranalyse;
+     Layout bleibt dabei immer gleich (Kacheln + Regenradar-Balken).
+     ============================================================ */
+  #overview { flex: none; border-bottom: 1px solid var(--border); background: var(--surface); padding: 0.7rem 1.1rem 0.75rem; }
+  .ov-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.6rem; margin-bottom: 0.55rem; }
+  .ov-location { font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: 1rem; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ov-when { font-size: 0.72rem; color: var(--muted); flex: none; }
+  .ov-tiles { display: flex; gap: 0.5rem; overflow-x: auto; padding-bottom: 0.15rem; scrollbar-width: thin; }
+  .tile {
+    flex: none; min-width: 5.6rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 0.45rem 0.6rem; display: flex; flex-direction: column; gap: 0.15rem;
+  }
+  .tile-label { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+  .tile-value { font-family: "JetBrains Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; font-size: 1.05rem; color: var(--text); display: flex; align-items: center; gap: 0.3rem; }
+  .tile-sub { font-size: 0.68rem; color: var(--muted); }
+  .status-dot { width: 0.5rem; height: 0.5rem; border-radius: 999px; flex: none; display: inline-block; }
+  .status-good { background: var(--status-good); }
+  .status-warning { background: var(--status-warning); }
+  .status-critical { background: var(--status-critical); }
+
+  .ov-rain { margin-top: 0.65rem; }
+  .ov-rain-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.35rem; }
+  .ov-rain-title { font-size: 0.72rem; font-weight: 600; color: var(--text); letter-spacing: 0.01em; }
+  .rain-bars { display: flex; align-items: flex-end; gap: 2px; height: 3.4rem; }
+  .rain-bar { flex: 1; min-width: 3px; border-radius: 3px 3px 1px 1px; background: var(--border); cursor: default; }
+  .rain-axis { display: flex; gap: 2px; margin-top: 0.2rem; }
+  .rain-axis span { flex: 1; text-align: center; font-size: 0.6rem; color: var(--muted); }
+  .ov-placeholder { font-size: 0.78rem; color: var(--muted); }
+
+  .ov-window { margin-top: 0.65rem; border-top: 1px dashed var(--border); padding-top: 0.55rem; }
+  .ov-window-head { font-size: 0.72rem; font-weight: 600; color: var(--text); margin-bottom: 0.4rem; }
+  .score-row { display: flex; align-items: center; gap: 0.5rem; font-size: 0.72rem; color: var(--muted); margin-bottom: 0.22rem; }
+  .score-row .score-name { width: 4.2rem; flex: none; }
+  .score-bar-track { flex: 1; height: 0.4rem; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+  .score-bar-fill { height: 100%; background: var(--accent); border-radius: 999px; }
+  .score-row .score-value { width: 2.4rem; flex: none; text-align: right; font-family: "JetBrains Mono", ui-monospace, monospace; }
 
   main { flex: 1; overflow-y: auto; padding: 1rem 1rem 0.5rem; display: flex; flex-direction: column; gap: 0.7rem; }
   .hint-row {
@@ -183,6 +228,34 @@
   </div>
 </header>
 
+<section id="overview" aria-label="Wetterübersicht">
+  <div class="ov-head">
+    <span class="ov-location" id="ovLocation">Noch keine Analyse</span>
+    <span class="ov-when mono" id="ovWhen"></span>
+  </div>
+  <div class="ov-tiles" id="ovTiles">
+    <div class="tile"><span class="tile-label">Temperatur</span><span class="tile-value" id="tTemp">–</span><span class="tile-sub" id="tTempSub"></span></div>
+    <div class="tile"><span class="tile-label">Gefühlt</span><span class="tile-value" id="tApparent">–</span></div>
+    <div class="tile"><span class="tile-label">Wind</span><span class="tile-value" id="tWind">–</span><span class="tile-sub" id="tWindSub"></span></div>
+    <div class="tile"><span class="tile-label">Taupunkt</span><span class="tile-value" id="tDewpoint">–</span></div>
+    <div class="tile"><span class="tile-label">Bewölkung</span><span class="tile-value" id="tCloud">–</span></div>
+    <div class="tile"><span class="tile-label">Sichtweite</span><span class="tile-value" id="tVisibility">–</span></div>
+    <div class="tile"><span class="tile-label">Konfidenz</span><span class="tile-value" id="tConfidence">–</span></div>
+  </div>
+  <div class="ov-rain">
+    <div class="ov-rain-head">
+      <span class="ov-rain-title">🌧️ Regenradar</span>
+      <span class="tile-sub" id="rainSummary">noch keine Daten</span>
+    </div>
+    <div class="rain-bars" id="rainBars"></div>
+    <div class="rain-axis" id="rainAxis"></div>
+  </div>
+  <div class="ov-window" id="ovWindow" hidden>
+    <div class="ov-window-head" id="ovWindowHead"></div>
+    <div id="ovWindowScores"></div>
+  </div>
+</section>
+
 <main id="log"></main>
 
 <form id="composer">
@@ -202,7 +275,7 @@
    nach einem Deploy auf einen Blick sieht, ob das Handy schon die
    neue Version geladen hat.
    ============================================================ */
-const APP_VERSION = "1.4.0";
+const APP_VERSION = "1.5.0";
 
 /* ============================================================
    KONFIGURATION — 1:1 aus der ursprünglichen Weather Engine
@@ -912,6 +985,195 @@ const versionBadge = document.getElementById("versionBadge");
 versionBadge.textContent = `v${APP_VERSION}`; // eigenes, immer sichtbares Badge — brand-sub wird auf schmalen
                                                  // Bildschirmen per CSS ausgeblendet, dieses Badge nicht
 
+/* ============================================================
+   ÜBERSICHT (Dashboard) — grafische Zusammenfassung neben dem Chat.
+   Wird nach jeder Werkzeug-Antwort aktualisiert, NIE aus DeepSeeks Text
+   abgeleitet — alle Zahlen kommen direkt aus den Tool-Ergebnissen
+   (dieselbe Regel wie sonst im System: keine erfundenen Werte). Jeder
+   Tool-Aufruf aktualisiert nur die Felder, für die er Daten liefert —
+   alles andere bleibt vom letzten bekannten Stand stehen, damit das
+   Layout immer gleich bleibt, egal welches Werkzeug zuletzt lief.
+   ============================================================ */
+const ovLocation = document.getElementById("ovLocation");
+const ovWhen = document.getElementById("ovWhen");
+const tTemp = document.getElementById("tTemp");
+const tTempSub = document.getElementById("tTempSub");
+const tApparent = document.getElementById("tApparent");
+const tWind = document.getElementById("tWind");
+const tWindSub = document.getElementById("tWindSub");
+const tDewpoint = document.getElementById("tDewpoint");
+const tCloud = document.getElementById("tCloud");
+const tVisibility = document.getElementById("tVisibility");
+const tConfidence = document.getElementById("tConfidence");
+const rainSummary = document.getElementById("rainSummary");
+const rainBars = document.getElementById("rainBars");
+const rainAxis = document.getElementById("rainAxis");
+const ovWindow = document.getElementById("ovWindow");
+const ovWindowHead = document.getElementById("ovWindowHead");
+const ovWindowScores = document.getElementById("ovWindowScores");
+
+// Sequenzielle Blau-Rampe (vorvalidierte Werte aus dem dataviz-Skill):
+// hell = niedrige Werte blass (nah an der hellen Fläche), hohe Werte
+// dunkel/satt. Dunkel = umgekehrt, damit niedrige Werte in der dunklen
+// Fläche zurücktreten und hohe Werte hell/leuchtend hervortreten.
+const RAIN_STEPS_LIGHT = ["#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"];
+const RAIN_STEPS_DARK = ["#0d366b", "#184f95", "#256abf", "#3987e5", "#6da7ec", "#9ec5f4", "#cde2fb"];
+function isDarkTheme() {
+  const attr = document.documentElement.getAttribute("data-theme");
+  if (attr === "dark") return true;
+  if (attr === "light") return false;
+  return !!(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+}
+function rainColorFor(pct) {
+  if (pct === null || pct === undefined) return "var(--border)";
+  const steps = isDarkTheme() ? RAIN_STEPS_DARK : RAIN_STEPS_LIGHT;
+  const idx = Math.min(steps.length - 1, Math.floor((pct / 100) * steps.length));
+  return steps[idx];
+}
+function statusDot(kind) {
+  const span = document.createElement("span");
+  span.className = "status-dot status-" + kind;
+  return span;
+}
+function confidenceKind(label) {
+  if (label === "hoch") return "good";
+  if (label === "mittel") return "warning";
+  return "critical";
+}
+function visibilityKind(label) {
+  if (!label) return "warning";
+  if (label.includes("sehr gute")) return "good";
+  if (label.includes("eingeschränkte")) return "warning";
+  return "critical";
+}
+function averageComputed(models, picker) {
+  const values = (models || []).filter((m) => m.status === "ok" && m.computed).map(picker).filter((v) => typeof v === "number");
+  return values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
+}
+function fmtNum(v, digits, unit) {
+  return v === null || v === undefined || Number.isNaN(v) ? "–" : `${v.toFixed(digits)}${unit || ""}`;
+}
+function fmtTimeBerlin(iso, opts) {
+  return new Date(iso).toLocaleTimeString("de-DE", { timeZone: "Europe/Berlin", ...opts });
+}
+
+function renderRainBars(outlook) {
+  rainBars.innerHTML = "";
+  rainAxis.innerHTML = "";
+  if (!outlook || !outlook.hourly || outlook.hourly.length === 0) {
+    rainSummary.textContent = (outlook && outlook.notes && outlook.notes[0]) || "keine Daten";
+    return;
+  }
+  const tz = outlook.timeZone || "Europe/Berlin";
+  outlook.hourly.forEach((h, i) => {
+    const bar = document.createElement("div");
+    bar.className = "rain-bar";
+    const pct = h.probabilityPct;
+    bar.style.height = (pct === null ? 4 : Math.max(4, pct)) + "%";
+    bar.style.background = rainColorFor(pct);
+    const hourLabel = h.time ? new Date(h.time).toLocaleTimeString("de-DE", { hour: "2-digit", timeZone: tz }) : "";
+    bar.title = pct === null ? `${hourLabel}: keine Daten` : `${hourLabel}: ${pct}% (${h.label})`;
+    rainBars.appendChild(bar);
+    const axisLabel = document.createElement("span");
+    if (i % 3 === 0) axisLabel.textContent = hourLabel.replace(" Uhr", "").replace(":00", "");
+    rainAxis.appendChild(axisLabel);
+  });
+  const s = outlook.summary;
+  if (s && s.maxProbabilityPct !== null) {
+    const when = s.firstRainHour ? new Date(s.firstRainHour).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit", timeZone: tz }) : null;
+    rainSummary.textContent = when ? `bis zu ${s.maxProbabilityPct}%, ab ca. ${when}` : `bis zu ${s.maxProbabilityPct}%`;
+  } else {
+    rainSummary.textContent = "durchgehend trocken";
+  }
+}
+
+function renderBestWindow(result) {
+  if (!result.bestContiguous3h) return;
+  ovWindow.hidden = false;
+  const w = result.bestContiguous3h;
+  ovWindowHead.textContent = `Bestes Zeitfenster: ${fmtTimeBerlin(w.startTime, { hour: "2-digit", minute: "2-digit" })}–${fmtTimeBerlin(w.endTime, { hour: "2-digit", minute: "2-digit" })} (Score ${Math.round(w.averageScore)}/100)`;
+  ovWindowScores.innerHTML = "";
+  const best = result.bestHour;
+  if (best && best.breakdown) {
+    const names = { wind: "Wind", gusts: "Böen", precipitation: "Regen", cloud: "Wolken", visibility: "Sicht", temperature: "Temp." };
+    for (const key of Object.keys(names)) {
+      const v = best.breakdown[key];
+      if (v === null || v === undefined) continue;
+      const row = document.createElement("div");
+      row.className = "score-row";
+      const nameEl = document.createElement("span"); nameEl.className = "score-name"; nameEl.textContent = names[key];
+      const track = document.createElement("div"); track.className = "score-bar-track";
+      const fill = document.createElement("div"); fill.className = "score-bar-fill"; fill.style.width = Math.max(2, Math.round(v)) + "%";
+      track.appendChild(fill);
+      const val = document.createElement("span"); val.className = "score-value"; val.textContent = Math.round(v);
+      row.appendChild(nameEl); row.appendChild(track); row.appendChild(val);
+      ovWindowScores.appendChild(row);
+    }
+  }
+}
+
+function updateOverviewFromToolResult(name, result) {
+  if (!result || result.error) return;
+
+  if (result.location && result.location.name) ovLocation.textContent = result.location.name;
+
+  if (result.requestedTime) {
+    ovWhen.textContent = new Date(result.requestedTime).toLocaleString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Berlin" });
+  } else if (result.range && result.range.start) {
+    ovWhen.textContent = new Date(result.range.start).toLocaleString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", timeZone: "Europe/Berlin" }) + " (Fenster)";
+  } else if (result.date) {
+    ovWhen.textContent = new Date(result.date + "T12:00:00Z").toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", timeZone: "Europe/Berlin" });
+  }
+
+  if (result.consensus) {
+    const c = result.consensus;
+    if (c.temperature && c.temperature.mean !== null) {
+      tTemp.textContent = fmtNum(c.temperature.mean, 1, "°C");
+      tTempSub.textContent = `Konfidenz ${c.temperature.label}`;
+    }
+    if (c.windSpeed && c.windSpeed.mean !== null) {
+      tWind.textContent = fmtNum(c.windSpeed.mean, 0, " km/h");
+      tWindSub.textContent = c.windGusts && c.windGusts.mean !== null ? `Böen ${fmtNum(c.windGusts.mean, 0, " km/h")}` : "";
+    }
+    if (c.cloudCover && c.cloudCover.mean !== null) tCloud.textContent = fmtNum(c.cloudCover.mean, 0, "%");
+  }
+  if (typeof result.confidenceTotal === "number") {
+    const label = result.confidenceTotal >= 80 ? "hoch" : result.confidenceTotal >= 50 ? "mittel" : "niedrig";
+    tConfidence.innerHTML = "";
+    tConfidence.appendChild(statusDot(confidenceKind(label)));
+    tConfidence.appendChild(document.createTextNode(` ${Math.round(result.confidenceTotal)}%`));
+  }
+
+  if (Array.isArray(result.models)) {
+    const avgApparent = averageComputed(result.models, (m) => m.computed.apparentTemperatureC);
+    const avgDewpoint = averageComputed(result.models, (m) => m.computed.dewpointC);
+    const avgVisibility = averageComputed(result.models, (m) => m.computed.visibility.heuristicScore);
+    if (avgApparent !== null) tApparent.textContent = fmtNum(avgApparent, 1, "°C");
+    if (avgDewpoint !== null) tDewpoint.textContent = fmtNum(avgDewpoint, 1, "°C");
+    if (avgVisibility !== null) {
+      const okModel = result.models.find((m) => m.status === "ok" && m.computed);
+      tVisibility.innerHTML = "";
+      tVisibility.appendChild(statusDot(visibilityKind(okModel ? okModel.computed.visibility.heuristicLabel : "")));
+      tVisibility.appendChild(document.createTextNode(` ${Math.round(avgVisibility)}/100`));
+    }
+  }
+  if (Array.isArray(result.perModel)) {
+    const scores = result.perModel.map((m) => m.heuristicScore).filter((v) => typeof v === "number");
+    if (scores.length) {
+      const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+      const withLabel = result.perModel.find((m) => m.heuristicLabel);
+      tVisibility.innerHTML = "";
+      tVisibility.appendChild(statusDot(visibilityKind(withLabel ? withLabel.heuristicLabel : "")));
+      tVisibility.appendChild(document.createTextNode(` ${Math.round(avg)}/100`));
+    }
+  }
+
+  if (result.rainOutlook) renderRainBars(result.rainOutlook);
+  else if (name === "get_rain_probability" && Array.isArray(result.hourly)) renderRainBars(result);
+
+  if (Array.isArray(result.rankedHours)) renderBestWindow(result);
+}
+
 function safeGet(key) { try { return localStorage.getItem(key); } catch { return null; } }
 function safeSet(key, value) { try { localStorage.setItem(key, value); } catch {} }
 function safeRemove(key) { try { localStorage.removeItem(key); } catch {} }
@@ -1023,6 +1285,9 @@ composer.addEventListener("submit", async (e) => {
     thinking.remove();
     renderMessage("assistant", result.reply || "(keine Antwort erhalten)");
     if (nerdToggle.checked) renderToolPanel(result.toolCalls);
+    // Übersicht (Dashboard) mit den Rohdaten aus dieser Runde aktualisieren —
+    // der Reihe nach, damit bei mehreren Aufrufen der jeweils neueste Stand gewinnt.
+    for (const call of result.toolCalls || []) updateOverviewFromToolResult(call.name, call.result);
     history.push({ role: "assistant", content: result.reply });
   } catch (err) {
     clearInterval(ticker);
