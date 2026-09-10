@@ -28,6 +28,15 @@
     --status-good: #0ca30c;
     --status-warning: #fab219;
     --status-critical: #d03b3b;
+    /* Kategorial-Farben (Kachel-Identität) — feste Zuordnung pro Messgröße,
+       nicht nach Rang vergeben (siehe dataviz-Skill, validierte Palette). */
+    --series-blue: #2a78d6;
+    --series-orange: #eb6834;
+    --series-aqua: #1baf7a;
+    --series-yellow: #eda100;
+    --series-magenta: #e87ba4;
+    --series-green: #008300;
+    --series-violet: #4a3aa7;
     color-scheme: light dark;
   }
   @media (prefers-color-scheme: dark) {
@@ -42,6 +51,13 @@
       --border: #2a3644;
       --danger: #e8b4ac;
       --danger-bg: #3a1f1c;
+      --series-blue: #3987e5;
+      --series-orange: #d95926;
+      --series-aqua: #199e70;
+      --series-yellow: #c98500;
+      --series-magenta: #d55181;
+      --series-green: #008300;
+      --series-violet: #9085e9;
     }
   }
   :root[data-theme="dark"] {
@@ -55,6 +71,13 @@
     --border: #2a3644;
     --danger: #e8b4ac;
     --danger-bg: #3a1f1c;
+    --series-blue: #3987e5;
+    --series-orange: #d95926;
+    --series-aqua: #199e70;
+    --series-yellow: #c98500;
+    --series-magenta: #d55181;
+    --series-green: #008300;
+    --series-violet: #9085e9;
   }
 
   * { box-sizing: border-box; }
@@ -79,7 +102,9 @@
     align-items: center;
     justify-content: space-between;
     padding: 0.85rem 1.1rem;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 3px solid transparent;
+    /* Drei Farben = drei Modelle (ICON-D2, ECMWF-IFS, GFS) */
+    border-image: linear-gradient(90deg, var(--series-blue), var(--series-aqua), var(--series-orange)) 1;
     background: var(--surface);
     flex: none;
   }
@@ -108,9 +133,17 @@
   .ov-when { font-size: 0.72rem; color: var(--muted); flex: none; }
   .ov-tiles { display: flex; gap: 0.5rem; overflow-x: auto; padding-bottom: 0.15rem; scrollbar-width: thin; }
   .tile {
-    flex: none; min-width: 5.6rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px;
-    padding: 0.45rem 0.6rem; display: flex; flex-direction: column; gap: 0.15rem;
+    flex: none; min-width: 5.6rem; background: var(--surface-2); border: 1px solid var(--border); border-top: 3px solid var(--tile-color, var(--border)); border-radius: 10px;
+    padding: 0.4rem 0.6rem 0.45rem; display: flex; flex-direction: column; gap: 0.15rem;
+    background: color-mix(in srgb, var(--tile-color, var(--surface-2)) 10%, var(--surface-2));
   }
+  .tile--temp { --tile-color: var(--series-orange); }
+  .tile--apparent { --tile-color: var(--series-magenta); }
+  .tile--wind { --tile-color: var(--series-blue); }
+  .tile--dewpoint { --tile-color: var(--series-aqua); }
+  .tile--cloud { --tile-color: var(--series-green); }
+  .tile--visibility { --tile-color: var(--series-yellow); }
+  .tile--confidence { --tile-color: var(--series-violet); }
   .tile-label { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
   .tile-value { font-family: "JetBrains Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; font-size: 1.05rem; color: var(--text); display: flex; align-items: center; gap: 0.3rem; }
   .tile-sub { font-size: 0.68rem; color: var(--muted); }
@@ -234,13 +267,13 @@
     <span class="ov-when mono" id="ovWhen"></span>
   </div>
   <div class="ov-tiles" id="ovTiles">
-    <div class="tile"><span class="tile-label">Temperatur</span><span class="tile-value" id="tTemp">–</span><span class="tile-sub" id="tTempSub"></span></div>
-    <div class="tile"><span class="tile-label">Gefühlt</span><span class="tile-value" id="tApparent">–</span></div>
-    <div class="tile"><span class="tile-label">Wind</span><span class="tile-value" id="tWind">–</span><span class="tile-sub" id="tWindSub"></span></div>
-    <div class="tile"><span class="tile-label">Taupunkt</span><span class="tile-value" id="tDewpoint">–</span></div>
-    <div class="tile"><span class="tile-label">Bewölkung</span><span class="tile-value" id="tCloud">–</span></div>
-    <div class="tile"><span class="tile-label">Sichtweite</span><span class="tile-value" id="tVisibility">–</span></div>
-    <div class="tile"><span class="tile-label">Konfidenz</span><span class="tile-value" id="tConfidence">–</span></div>
+    <div class="tile tile--temp"><span class="tile-label">🌡️ Temperatur</span><span class="tile-value" id="tTemp">–</span><span class="tile-sub" id="tTempSub"></span></div>
+    <div class="tile tile--apparent"><span class="tile-label">🧥 Gefühlt</span><span class="tile-value" id="tApparent">–</span></div>
+    <div class="tile tile--wind"><span class="tile-label">💨 Wind</span><span class="tile-value" id="tWind">–</span><span class="tile-sub" id="tWindSub"></span></div>
+    <div class="tile tile--dewpoint"><span class="tile-label">💧 Taupunkt</span><span class="tile-value" id="tDewpoint">–</span></div>
+    <div class="tile tile--cloud"><span class="tile-label">☁️ Bewölkung</span><span class="tile-value" id="tCloud">–</span></div>
+    <div class="tile tile--visibility"><span class="tile-label">👁️ Sichtweite</span><span class="tile-value" id="tVisibility">–</span></div>
+    <div class="tile tile--confidence"><span class="tile-label">🎯 Konfidenz</span><span class="tile-value" id="tConfidence">–</span></div>
   </div>
   <div class="ov-rain">
     <div class="ov-rain-head">
@@ -275,7 +308,7 @@
    nach einem Deploy auf einen Blick sieht, ob das Handy schon die
    neue Version geladen hat.
    ============================================================ */
-const APP_VERSION = "1.5.0";
+const APP_VERSION = "1.6.0";
 
 /* ============================================================
    KONFIGURATION — 1:1 aus der ursprünglichen Weather Engine
@@ -1091,11 +1124,12 @@ function renderBestWindow(result) {
   if (!result.bestContiguous3h) return;
   ovWindow.hidden = false;
   const w = result.bestContiguous3h;
-  ovWindowHead.textContent = `Bestes Zeitfenster: ${fmtTimeBerlin(w.startTime, { hour: "2-digit", minute: "2-digit" })}–${fmtTimeBerlin(w.endTime, { hour: "2-digit", minute: "2-digit" })} (Score ${Math.round(w.averageScore)}/100)`;
+  ovWindowHead.textContent = `🏆 Bestes Zeitfenster: ${fmtTimeBerlin(w.startTime, { hour: "2-digit", minute: "2-digit" })}–${fmtTimeBerlin(w.endTime, { hour: "2-digit", minute: "2-digit" })} (Score ${Math.round(w.averageScore)}/100)`;
   ovWindowScores.innerHTML = "";
   const best = result.bestHour;
   if (best && best.breakdown) {
     const names = { wind: "Wind", gusts: "Böen", precipitation: "Regen", cloud: "Wolken", visibility: "Sicht", temperature: "Temp." };
+    const colors = { wind: "var(--series-blue)", gusts: "var(--series-aqua)", precipitation: "var(--series-magenta)", cloud: "var(--series-green)", visibility: "var(--series-yellow)", temperature: "var(--series-orange)" };
     for (const key of Object.keys(names)) {
       const v = best.breakdown[key];
       if (v === null || v === undefined) continue;
@@ -1103,7 +1137,7 @@ function renderBestWindow(result) {
       row.className = "score-row";
       const nameEl = document.createElement("span"); nameEl.className = "score-name"; nameEl.textContent = names[key];
       const track = document.createElement("div"); track.className = "score-bar-track";
-      const fill = document.createElement("div"); fill.className = "score-bar-fill"; fill.style.width = Math.max(2, Math.round(v)) + "%";
+      const fill = document.createElement("div"); fill.className = "score-bar-fill"; fill.style.width = Math.max(2, Math.round(v)) + "%"; fill.style.background = colors[key];
       track.appendChild(fill);
       const val = document.createElement("span"); val.className = "score-value"; val.textContent = Math.round(v);
       row.appendChild(nameEl); row.appendChild(track); row.appendChild(val);
@@ -1180,11 +1214,6 @@ function safeRemove(key) { try { localStorage.removeItem(key); } catch {} }
 
 let history = [];
 
-const EXAMPLE_EXCHANGE = {
-  question: "Wann ist morgen zwischen 8 und 18 Uhr das beste Wetter zum Wandern auf der Zugspitze?",
-  answer: "Beispiel — so beantwortet der Wetteranalyst eine echte Frage: er ruft find_best_weather_window auf, vergleicht ICON-D2, ECMWF und GFS stundenweise und nennt dir das beste Zeitfenster mit Begründung (Wind, Niederschlag, Sicht). Stell unten deine eigene Frage.",
-};
-
 function renderMessage(role, text, opts = {}) {
   const el = document.createElement("div");
   el.className = "msg " + role + (opts.example ? " example" : "");
@@ -1217,15 +1246,7 @@ function renderToolPanel(toolCalls) {
 
 function renderInitial() {
   log.innerHTML = "";
-  if (history.length === 0) {
-    renderMessage("assistant", EXAMPLE_EXCHANGE.question + "\n\n" + EXAMPLE_EXCHANGE.answer, { example: true });
-    const hint = document.createElement("div");
-    hint.className = "hint-row";
-    hint.textContent = "Echte Wetterdaten von Open-Meteo (ICON, ECMWF, GFS) · keine erfundenen Werte · Schätzungen sind klar als solche gekennzeichnet";
-    log.appendChild(hint);
-  } else {
-    for (const m of history) renderMessage(m.role, m.content);
-  }
+  for (const m of history) renderMessage(m.role, m.content);
 }
 
 function openGate() {
