@@ -9,6 +9,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="icon-180.png">
 <meta name="theme-color" content="#10161d">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Work+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root {
     --bg: #eef1f4;
@@ -37,6 +38,7 @@
     --series-magenta: #e87ba4;
     --series-green: #008300;
     --series-violet: #4a3aa7;
+    --series-red: #e34948;
     color-scheme: light dark;
   }
   @media (prefers-color-scheme: dark) {
@@ -58,6 +60,7 @@
       --series-magenta: #d55181;
       --series-green: #008300;
       --series-violet: #9085e9;
+      --series-red: #e66767;
     }
   }
   :root[data-theme="dark"] {
@@ -78,6 +81,7 @@
     --series-magenta: #d55181;
     --series-green: #008300;
     --series-violet: #9085e9;
+    --series-red: #e66767;
   }
 
   * { box-sizing: border-box; }
@@ -119,18 +123,35 @@
     cursor: pointer; font-size: 1rem; line-height: 1;
   }
   .icon-btn:hover { border-color: var(--accent); color: var(--accent); }
-  label.toggle { display: flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; color: var(--muted); cursor: pointer; user-select: none; }
-  label.toggle input { accent-color: var(--accent); }
 
   /* ============================================================
      ÜBERSICHT — immer sichtbares Dashboard zwischen Header und Chat.
      Füllt/aktualisiert sich automatisch nach jeder Wetteranalyse;
      Layout bleibt dabei immer gleich (Kacheln + Regenradar-Balken).
      ============================================================ */
-  #overview { flex: none; border-bottom: 1px solid var(--border); background: var(--surface); padding: 0.7rem 1.1rem 0.75rem; }
+  #overview { flex: none; border-bottom: 1px solid var(--border); background: var(--surface); padding: 0.7rem 1.1rem 0.75rem; overflow-y: auto; }
   .ov-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.6rem; margin-bottom: 0.55rem; }
+  .ov-head-left { display: flex; align-items: baseline; gap: 0.45rem; min-width: 0; }
+  .locate-btn {
+    flex: none; border: 1px solid var(--border); background: var(--surface-2); color: var(--muted);
+    border-radius: 999px; width: 1.7rem; height: 1.7rem; display: flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 0.85rem; line-height: 1; padding: 0;
+  }
+  .locate-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .locate-btn:disabled { opacity: 0.5; cursor: default; }
   .ov-location { font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: 1rem; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ov-when { font-size: 0.72rem; color: var(--muted); flex: none; }
+
+  .fav-row { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.55rem; }
+  .fav-chip {
+    display: flex; align-items: center; gap: 0.35rem; border: 1px solid var(--border); background: var(--surface-2);
+    color: var(--text); border-radius: 999px; padding: 0.28rem 0.7rem; font-size: 0.76rem; cursor: pointer; font: inherit;
+  }
+  .fav-chip:hover { border-color: var(--accent); }
+  .fav-chip.fav-add { color: var(--muted); border-style: dashed; }
+  .fav-del { color: var(--muted); font-size: 0.8rem; line-height: 1; padding: 0 0.1rem; }
+  .fav-del:hover { color: var(--danger); }
+
   .ov-tiles { display: flex; gap: 0.5rem; overflow-x: auto; padding-bottom: 0.15rem; scrollbar-width: thin; }
   .tile {
     flex: none; min-width: 5.6rem; background: var(--surface-2); border: 1px solid var(--border); border-top: 3px solid var(--tile-color, var(--border)); border-radius: 10px;
@@ -144,6 +165,8 @@
   .tile--cloud { --tile-color: var(--series-green); }
   .tile--visibility { --tile-color: var(--series-yellow); }
   .tile--confidence { --tile-color: var(--series-violet); }
+  .tile--sun { --tile-color: var(--series-yellow); }
+  .tile--uv { --tile-color: var(--series-red); }
   .tile-label { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
   .tile-value { font-family: "JetBrains Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; font-size: 1.05rem; color: var(--text); display: flex; align-items: center; gap: 0.3rem; }
   .tile-sub { font-size: 0.68rem; color: var(--muted); }
@@ -169,30 +192,26 @@
   .score-bar-fill { height: 100%; background: var(--accent); border-radius: 999px; }
   .score-row .score-value { width: 2.4rem; flex: none; text-align: right; font-family: "JetBrains Mono", ui-monospace, monospace; }
 
-  main { flex: 1; overflow-y: auto; padding: 1rem 1rem 0.5rem; display: flex; flex-direction: column; gap: 0.7rem; }
-  .hint-row {
-    align-self: center; max-width: 34rem; text-align: center; color: var(--muted); font-size: 0.82rem;
-    padding: 0.5rem 0.9rem; border: 1px dashed var(--border); border-radius: var(--radius);
+  .ov-days { margin-top: 0.65rem; border-top: 1px dashed var(--border); padding-top: 0.55rem; }
+  .ov-days-head { font-size: 0.72rem; font-weight: 600; color: var(--text); margin-bottom: 0.4rem; }
+  .day-cards { display: flex; gap: 0.5rem; }
+  .day-card {
+    flex: 1; min-width: 0; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 0.5rem 0.55rem; display: flex; flex-direction: column; gap: 0.2rem;
   }
+  .day-name { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); }
+  .day-temp { font-family: "JetBrains Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; font-size: 1.1rem; }
+  .day-rain { font-size: 0.7rem; color: var(--muted); display: flex; align-items: center; gap: 0.3rem; }
+
+  .ov-radar { margin-top: 0.65rem; border-top: 1px dashed var(--border); padding-top: 0.55rem; }
+  .ov-radar-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.35rem; }
+  .radar-map { height: 11rem; border-radius: 10px; overflow: hidden; border: 1px solid var(--border); background: var(--surface-2); }
+
+  main { flex: 1; overflow-y: auto; padding: 1rem 1rem 0.5rem; display: flex; flex-direction: column; gap: 0.7rem; }
   .msg { max-width: 78%; padding: 0.65rem 0.95rem; border-radius: var(--radius); line-height: 1.5; white-space: pre-wrap; font-size: 0.94rem; }
   .msg.user { align-self: flex-end; background: var(--accent); color: var(--accent-ink); border-bottom-right-radius: 4px; }
   .msg.assistant { align-self: flex-start; background: var(--surface); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
-  .msg.assistant.example { opacity: 0.82; }
   .msg.error { align-self: flex-start; background: var(--danger-bg); color: var(--danger); border: 1px solid var(--danger); }
-  .example-tag { display: block; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 0.3rem; }
-
-  .toolpanel {
-    align-self: flex-start; max-width: 88%; border: 1px solid var(--border); border-radius: 10px;
-    background: var(--surface-2); overflow: hidden;
-  }
-  .toolpanel summary {
-    cursor: pointer; padding: 0.45rem 0.75rem; font-size: 0.76rem; color: var(--muted);
-    display: flex; align-items: center; gap: 0.4rem;
-  }
-  .toolpanel summary::-webkit-details-marker { display: none; }
-  .toolpanel summary:before { content: "▸"; display: inline-block; transition: transform 0.15s; }
-  .toolpanel[open] summary:before { transform: rotate(90deg); }
-  .toolpanel pre { margin: 0; padding: 0 0.75rem 0.7rem; font-size: 0.72rem; white-space: pre-wrap; word-break: break-word; color: var(--text); max-height: 16rem; overflow-y: auto; }
 
   form#composer {
     display: flex; gap: 0.6rem; padding: 0.8rem 1rem calc(0.8rem + env(safe-area-inset-bottom));
@@ -256,16 +275,19 @@
   </div>
   <div class="header-actions">
     <span class="version-badge mono" id="versionBadge" title="App-Version — hilft zu prüfen, ob dein Handy schon den neuesten Stand geladen hat"></span>
-    <label class="toggle"><input type="checkbox" id="nerd" /> Nerd-Modus</label>
     <button class="icon-btn" id="resetKey" title="Schlüssel ändern / entfernen">⚙︎</button>
   </div>
 </header>
 
 <section id="overview" aria-label="Wetterübersicht">
   <div class="ov-head">
-    <span class="ov-location" id="ovLocation">Noch keine Analyse</span>
+    <div class="ov-head-left">
+      <button type="button" class="locate-btn" id="locateBtn" title="Aktueller Standort — 3-Tage-Überblick">📍</button>
+      <span class="ov-location" id="ovLocation">Noch keine Analyse</span>
+    </div>
     <span class="ov-when mono" id="ovWhen"></span>
   </div>
+  <div class="fav-row" id="favRow"></div>
   <div class="ov-tiles" id="ovTiles">
     <div class="tile tile--temp"><span class="tile-label">🌡️ Temperatur</span><span class="tile-value" id="tTemp">–</span><span class="tile-sub" id="tTempSub"></span></div>
     <div class="tile tile--apparent"><span class="tile-label">🧥 Gefühlt</span><span class="tile-value" id="tApparent">–</span></div>
@@ -274,6 +296,8 @@
     <div class="tile tile--cloud"><span class="tile-label">☁️ Bewölkung</span><span class="tile-value" id="tCloud">–</span></div>
     <div class="tile tile--visibility"><span class="tile-label">👁️ Sichtweite</span><span class="tile-value" id="tVisibility">–</span></div>
     <div class="tile tile--confidence"><span class="tile-label">🎯 Konfidenz</span><span class="tile-value" id="tConfidence">–</span></div>
+    <div class="tile tile--sun"><span class="tile-label">🌅 Sonne</span><span class="tile-value" id="tSun">–</span></div>
+    <div class="tile tile--uv"><span class="tile-label">☀️ UV-Index</span><span class="tile-value" id="tUv">–</span></div>
   </div>
   <div class="ov-rain">
     <div class="ov-rain-head">
@@ -282,6 +306,14 @@
     </div>
     <div class="rain-bars" id="rainBars"></div>
     <div class="rain-axis" id="rainAxis"></div>
+  </div>
+  <div class="ov-radar" id="radarSection" hidden>
+    <div class="ov-radar-head"><span class="ov-rain-title">🗺️ Regenradar-Karte</span></div>
+    <div class="radar-map" id="radarMap"></div>
+  </div>
+  <div class="ov-days" id="ovDays" hidden>
+    <div class="ov-days-head">📅 3-Tage-Überblick</div>
+    <div class="day-cards" id="dayCards"></div>
   </div>
   <div class="ov-window" id="ovWindow" hidden>
     <div class="ov-window-head" id="ovWindowHead"></div>
@@ -296,6 +328,11 @@
   <button class="send" id="send" type="submit" aria-label="Senden">➤</button>
 </form>
 
+<!-- Leaflet: für die Regenradar-Karte (Kartenkacheln + Niederschlags-Overlay).
+     Klassisches <script> vor dem Haupt-Skript, damit "L" beim Ausführen des
+     Haupt-Skripts schon bereit steht — falls das Laden fehlschlägt (kein Netz),
+     prüft der Karten-Code selbst per "typeof L" und lässt die Karte einfach weg. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
 <script>
 /* Bewusst KEIN type="module": module-Skripte werden von Chrome/Safari
    beim direkten Öffnen einer HTML-Datei über file:// aus CORS-Gründen
@@ -308,7 +345,7 @@
    nach einem Deploy auf einen Blick sieht, ob das Handy schon die
    neue Version geladen hat.
    ============================================================ */
-const APP_VERSION = "1.6.0";
+const APP_VERSION = "1.7.0";
 
 /* ============================================================
    KONFIGURATION — 1:1 aus der ursprünglichen Weather Engine
@@ -546,6 +583,23 @@ async function resolveLocation(query) {
   if (!first) throw new LocationNotFoundError(query);
   const elevationM = first.elevation ?? (await fetchElevation(first.latitude, first.longitude));
   return { name: [first.name, first.admin1, first.country].filter(Boolean).join(", "), lat: first.latitude, lon: first.longitude, elevationM };
+}
+
+/* Sonnenauf-/-untergang: eigener, leichter Extra-Abruf (Open-Meteo-Feld "daily",
+   modellunabhängig — Astronomie ist bei allen Modellen identisch, deshalb reicht
+   ein Aufruf statt einem pro Modell). Rein additiv/optional: schlägt der Abruf
+   fehl, bleibt die Sonne-Kachel einfach leer, der Rest der App läuft normal weiter. */
+async function fetchSunTimes(lat, lon, timeZone, date) {
+  try {
+    const params = new URLSearchParams({ latitude: String(lat), longitude: String(lon), daily: "sunrise,sunset", timezone: timeZone });
+    if (date) { params.set("start_date", date); params.set("end_date", date); }
+    const res = await fetch(`https://api.open-meteo.com/v1/forecast?${params.toString()}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const sunrise = data.daily?.sunrise?.[0] ?? null;
+    const sunset = data.daily?.sunset?.[0] ?? null;
+    return sunrise && sunset ? { sunrise, sunset } : null;
+  } catch { return null; }
 }
 
 /* ============================================================
@@ -794,11 +848,11 @@ function shapeVisibilityResponse(result) {
   return {
     location: result.location, requestedTime: result.requestedTime,
     perModel: result.models.map((m) => ({ model: m.model, status: m.status, modelVisibilityM: m.computed?.visibility.modelVisibilityM ?? null, hazeRisk: m.computed?.visibility.hazeRisk ?? null, heuristicScore: m.computed?.visibility.heuristicScore ?? null, heuristicLabel: m.computed?.visibility.heuristicLabel ?? null })),
-    notes: result.notes, rainOutlook: result.rainOutlook,
+    notes: result.notes, rainOutlook: result.rainOutlook, sunTimes: result.sunTimes,
   };
 }
 function shapeConsensusResponse(result) {
-  return { location: result.location, requestedTime: result.requestedTime, consensus: result.consensus, confidenceTotal: result.confidenceTotal, notes: result.notes, rainOutlook: result.rainOutlook };
+  return { location: result.location, requestedTime: result.requestedTime, consensus: result.consensus, confidenceTotal: result.confidenceTotal, notes: result.notes, rainOutlook: result.rainOutlook, sunTimes: result.sunTimes };
 }
 
 /* ============================================================
@@ -836,22 +890,24 @@ function validateBestWindow(args) {
 async function runInstantQuery(input) {
   const location = await resolveLocation(input.location);
   const isoTime = zonedTimeToUtcIso(input.date, input.time, input.timeZone);
-  const [result, rainOutlook] = await Promise.all([
+  const [result, rainOutlook, sunTimes] = await Promise.all([
     queryWeather(location, { kind: "instant", time: isoTime }, input.models),
     attachRainOutlook(location, input.date, input.timeZone, input.models, isoTime),
+    fetchSunTimes(location.lat, location.lon, input.timeZone, input.date),
   ]);
-  return { ...result, rainOutlook };
+  return { ...result, rainOutlook, sunTimes };
 }
 async function runBestWindowQuery(input) {
   const location = await resolveLocation(input.location);
   const startIso = zonedTimeToUtcIso(input.date, input.timeRange.start, input.timeZone);
   const endIso = zonedTimeToUtcIso(input.date, input.timeRange.end, input.timeZone);
   const weights = DEFAULT_PROFILES[input.profile] ?? DEFAULT_PROFILES.normal;
-  const [result, rainOutlook] = await Promise.all([
+  const [result, rainOutlook, sunTimes] = await Promise.all([
     findBestWeatherWindow(location, { start: startIso, end: endIso }, input.models, weights),
     attachRainOutlook(location, input.date, input.timeZone, input.models, startIso),
+    fetchSunTimes(location.lat, location.lon, input.timeZone, input.date),
   ]);
-  return { ...result, rainOutlook };
+  return { ...result, rainOutlook, sunTimes };
 }
 
 /* ============================================================
@@ -867,7 +923,7 @@ function instantParameters(timeDescription) {
 const DEEPSEEK_TOOLS = [
   { type: "function", function: { name: "get_weather", description: "Wetter an einem Ort zu einem bestimmten Zeitpunkt (Standardfall).", parameters: instantParameters("Uhrzeit HH:00, z.B. '14:00'. Weglassen = 12:00.") } },
   { type: "function", function: { name: "get_hourly_weather", description: "Wie get_weather, für eine explizite Stunde.", parameters: instantParameters("Uhrzeit HH:00.") } },
-  { type: "function", function: { name: "get_weather_details", description: "Vollständige Rohdaten für 'Nerd-Modus'-Anfragen.", parameters: instantParameters("Uhrzeit HH:00. Weglassen = 12:00.") } },
+  { type: "function", function: { name: "get_weather_details", description: "Vollständige Rohdaten, wenn der Nutzer explizit Detail-/Rohwerte sehen will.", parameters: instantParameters("Uhrzeit HH:00. Weglassen = 12:00.") } },
   { type: "function", function: { name: "compare_models", description: "Expliziter Modellvergleich.", parameters: instantParameters("Uhrzeit HH:00. Weglassen = 12:00.") } },
   { type: "function", function: { name: "get_mountain_weather", description: "Wie get_weather, mit Fokus auf Berg-/Höhenlagen.", parameters: instantParameters("Uhrzeit HH:00. Weglassen = 12:00.") } },
   { type: "function", function: { name: "get_visibility", description: "Nur die Fernsicht-Einschätzung (3 Ebenen).", parameters: instantParameters("Uhrzeit HH:00. Weglassen = 12:00.") } },
@@ -938,7 +994,7 @@ Regeln, die du IMMER befolgst:
 3. Wenn ein Modell für den Zeitpunkt keine Daten hat (z.B. ICON-D2 deckt nur ~48h ab), erwähnst du das statt es zu verschweigen.
 4. Sichtweiten-Angaben sind eine Heuristik (0-100 Score + Label), keine exakte Kilometerzahl — stelle sie entsprechend vorsichtig dar.
 5. Der Konsens-/Confidence-Wert beschreibt, wie einig sich die Modelle sind — bei nur einem verfügbaren Modell ist das kein Beweis für hohe Sicherheit; sag das dann.
-6. Antworte in der Sprache der Nutzerfrage (Standard: Deutsch), knapp und konkret. Keine Rohdatentabellen, außer im Nerd-Modus explizit gewünscht.
+6. Antworte in der Sprache der Nutzerfrage (Standard: Deutsch), knapp und konkret. Keine Rohdatentabellen, außer wenn der Nutzer explizit Rohdaten/Detailwerte verlangt.
 7. Bei Fragen ohne Wetterbezug antworte normal ohne Werkzeugaufruf.
 8. Du entschuldigst dich nicht präventiv und behauptest nicht, dir sei ein Fehler unterlaufen, wenn tatsächlich keiner passiert ist. Falls du tatsächlich etwas falsch gemacht hast, korrigierst du es schlicht und sachlich, ohne Drama.
 9. Für jede Frage zur Regenwahrscheinlichkeit — auch Kapazitätsfragen wie "hast du einen Regenradar?" oder "gibt es ein Regenradar?" — antwortest du NIEMALS nur mit "nein, das habe ich nicht". Du rufst IMMER get_rain_probability auf und lieferst die stündliche Regenwahrscheinlichkeit als Antwort; dabei erwähnst du kurz und beiläufig, dass es sich um eine berechnete Zeitreihe (Prozent pro Stunde) statt einer Kartengrafik handelt — das ist eine Klarstellung, kein Grund, die eigentliche Frage unbeantwortet zu lassen. "Wann regnet es", "wie hoch ist die Regenwahrscheinlichkeit", "Regenradar" führen also IMMER zu einem Werkzeugaufruf, nie zu einer bloßen Absage.
@@ -1011,7 +1067,6 @@ const log = document.getElementById("log");
 const composer = document.getElementById("composer");
 const input = document.getElementById("input");
 const sendBtn = document.getElementById("send");
-const nerdToggle = document.getElementById("nerd");
 const brandSub = document.getElementById("brandSub");
 brandSub.textContent = `ICON · ECMWF · GFS · v${APP_VERSION}`;
 const versionBadge = document.getElementById("versionBadge");
@@ -1029,6 +1084,8 @@ versionBadge.textContent = `v${APP_VERSION}`; // eigenes, immer sichtbares Badge
    ============================================================ */
 const ovLocation = document.getElementById("ovLocation");
 const ovWhen = document.getElementById("ovWhen");
+const locateBtn = document.getElementById("locateBtn");
+const favRow = document.getElementById("favRow");
 const tTemp = document.getElementById("tTemp");
 const tTempSub = document.getElementById("tTempSub");
 const tApparent = document.getElementById("tApparent");
@@ -1038,9 +1095,14 @@ const tDewpoint = document.getElementById("tDewpoint");
 const tCloud = document.getElementById("tCloud");
 const tVisibility = document.getElementById("tVisibility");
 const tConfidence = document.getElementById("tConfidence");
+const tSun = document.getElementById("tSun");
+const tUv = document.getElementById("tUv");
 const rainSummary = document.getElementById("rainSummary");
 const rainBars = document.getElementById("rainBars");
 const rainAxis = document.getElementById("rainAxis");
+const radarSection = document.getElementById("radarSection");
+const ovDays = document.getElementById("ovDays");
+const dayCards = document.getElementById("dayCards");
 const ovWindow = document.getElementById("ovWindow");
 const ovWindowHead = document.getElementById("ovWindowHead");
 const ovWindowScores = document.getElementById("ovWindowScores");
@@ -1077,6 +1139,12 @@ function visibilityKind(label) {
   if (!label) return "warning";
   if (label.includes("sehr gute")) return "good";
   if (label.includes("eingeschränkte")) return "warning";
+  return "critical";
+}
+function uvKind(uv) {
+  if (uv === null || uv === undefined) return "warning";
+  if (uv < 3) return "good";
+  if (uv < 8) return "warning";
   return "critical";
 }
 function averageComputed(models, picker) {
@@ -1182,6 +1250,7 @@ function updateOverviewFromToolResult(name, result) {
     const avgApparent = averageComputed(result.models, (m) => m.computed.apparentTemperatureC);
     const avgDewpoint = averageComputed(result.models, (m) => m.computed.dewpointC);
     const avgVisibility = averageComputed(result.models, (m) => m.computed.visibility.heuristicScore);
+    const avgUv = averageComputed(result.models, (m) => m.raw?.uvIndex);
     if (avgApparent !== null) tApparent.textContent = fmtNum(avgApparent, 1, "°C");
     if (avgDewpoint !== null) tDewpoint.textContent = fmtNum(avgDewpoint, 1, "°C");
     if (avgVisibility !== null) {
@@ -1190,6 +1259,14 @@ function updateOverviewFromToolResult(name, result) {
       tVisibility.appendChild(statusDot(visibilityKind(okModel ? okModel.computed.visibility.heuristicLabel : "")));
       tVisibility.appendChild(document.createTextNode(` ${Math.round(avgVisibility)}/100`));
     }
+    if (avgUv !== null) {
+      tUv.innerHTML = "";
+      tUv.appendChild(statusDot(uvKind(avgUv)));
+      tUv.appendChild(document.createTextNode(` ${avgUv.toFixed(1)}`));
+    }
+  }
+  if (result.sunTimes) {
+    tSun.textContent = `${result.sunTimes.sunrise.slice(11, 16)} / ${result.sunTimes.sunset.slice(11, 16)}`;
   }
   if (Array.isArray(result.perModel)) {
     const scores = result.perModel.map((m) => m.heuristicScore).filter((v) => typeof v === "number");
@@ -1206,42 +1283,222 @@ function updateOverviewFromToolResult(name, result) {
   else if (name === "get_rain_probability" && Array.isArray(result.hourly)) renderRainBars(result);
 
   if (Array.isArray(result.rankedHours)) renderBestWindow(result);
+
+  if (result.location && typeof result.location.lat === "number" && typeof result.location.lon === "number") {
+    ensureRadarMap(result.location.lat, result.location.lon);
+  }
 }
 
+/* ============================================================
+   REGENRADAR-KARTE — echte Kartengrafik (OpenStreetMap-Kacheln +
+   RainViewer-Niederschlags-Overlay), zusätzlich zur berechneten
+   Regenwahrscheinlichkeits-Zeitreihe oben. Beides kostenlos, ohne
+   eigenen API-Schlüssel. Rein additiv: schlägt das Laden fehl (kein
+   Netz, Leaflet nicht geladen, RainViewer nicht erreichbar), bleibt
+   die Karte einfach ausgeblendet — der Rest der App bleibt nutzbar.
+   ============================================================ */
+let radarMapInstance = null;
+let radarMarker = null;
+let radarPrecipLayer = null;
+function cssVarColor(name, fallback) {
+  try {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return v || fallback;
+  } catch { return fallback; }
+}
+async function ensureRadarMap(lat, lon) {
+  if (typeof L === "undefined") return; // Leaflet nicht geladen (z.B. kein Netz) — Karte weglassen
+  radarSection.hidden = false;
+  try {
+    if (!radarMapInstance) {
+      radarMapInstance = L.map("radarMap", { zoomControl: false, attributionControl: false, scrollWheelZoom: false }).setView([lat, lon], 7);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 12 }).addTo(radarMapInstance);
+      radarMarker = L.circleMarker([lat, lon], { radius: 5, weight: 2, color: cssVarColor("--accent", "#a8752e"), fillColor: cssVarColor("--accent", "#a8752e"), fillOpacity: 0.9 }).addTo(radarMapInstance);
+    } else {
+      radarMapInstance.invalidateSize();
+      radarMapInstance.setView([lat, lon], radarMapInstance.getZoom());
+      if (radarMarker) radarMarker.setLatLng([lat, lon]);
+    }
+    const res = await fetch("https://api.rainviewer.com/public/weather-maps.json");
+    if (!res.ok) return;
+    const data = await res.json();
+    const host = data.host || "https://tilecache.rainviewer.com";
+    const frames = data.radar?.past || [];
+    const latest = frames[frames.length - 1];
+    if (latest) {
+      if (radarPrecipLayer) radarMapInstance.removeLayer(radarPrecipLayer);
+      radarPrecipLayer = L.tileLayer(`${host}${latest.path}/256/{z}/{x}/{y}/2/1_1.png`, { opacity: 0.65, maxZoom: 12 }).addTo(radarMapInstance);
+    }
+  } catch {
+    // Karte/Overlay optional — bei Netzwerkproblemen einfach weglassen.
+  }
+}
+
+/* ============================================================
+   STANDORT-FINDER + 3-TAGE-ÜBERBLICK — nutzt die Browser-Geolocation
+   statt manuell den Ort einzutippen, und lädt direkt einen 3-Tage-
+   Überblick statt nur eines einzelnen Zeitpunkts. Läuft komplett ohne
+   DeepSeek (rein deterministisch aus der Weather Engine), also ohne
+   API-Kosten/-Wartezeit für eine reine Anzeige-Aktualisierung.
+   ============================================================ */
+function todayIsoBerlin() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+}
+function addDaysIso(baseDate, days) {
+  const d = new Date(`${baseDate}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+async function run3DayOverview(location) {
+  const timeZone = "Europe/Berlin";
+  const today = todayIsoBerlin();
+  const dates = [0, 1, 2].map((n) => addDaysIso(today, n));
+  return Promise.all(dates.map(async (date) => {
+    const isoTime = zonedTimeToUtcIso(date, "12:00", timeZone);
+    const [result, rainOutlook, sunTimes] = await Promise.all([
+      queryWeather(location, { kind: "instant", time: isoTime }, DEFAULT_MODELS),
+      attachRainOutlook(location, date, timeZone, DEFAULT_MODELS, isoTime),
+      fetchSunTimes(location.lat, location.lon, timeZone, date),
+    ]);
+    return { date, ...result, rainOutlook, sunTimes };
+  }));
+}
+const DAY_NAME_FMT = new Intl.DateTimeFormat("de-DE", { weekday: "short", timeZone: "Europe/Berlin" });
+function renderDayCards(results) {
+  dayCards.innerHTML = "";
+  results.forEach((r, i) => {
+    const card = document.createElement("div");
+    card.className = "day-card";
+    const name = document.createElement("span");
+    name.className = "day-name";
+    name.textContent = i === 0 ? "Heute" : i === 1 ? "Morgen" : DAY_NAME_FMT.format(new Date(`${r.date}T12:00:00Z`));
+    const temp = document.createElement("span");
+    temp.className = "day-temp mono";
+    temp.textContent = r.consensus?.temperature?.mean != null ? fmtNum(r.consensus.temperature.mean, 0, "°C") : "–";
+    const rain = document.createElement("span");
+    rain.className = "day-rain";
+    const maxPct = r.rainOutlook?.summary?.maxProbabilityPct;
+    rain.appendChild(statusDot(maxPct >= 50 ? "critical" : maxPct >= 20 ? "warning" : "good"));
+    rain.appendChild(document.createTextNode(typeof maxPct === "number" ? ` ${maxPct}% Regen` : " –"));
+    card.appendChild(name);
+    card.appendChild(temp);
+    card.appendChild(rain);
+    dayCards.appendChild(card);
+  });
+  ovDays.hidden = false;
+}
+async function showLocationOverview(location) {
+  ovLocation.textContent = location.name;
+  const results = await run3DayOverview(location);
+  updateOverviewFromToolResult("get_weather", results[0]);
+  renderDayCards(results);
+  ensureRadarMap(location.lat, location.lon);
+}
+async function reverseGeocode(lat, lon) {
+  try {
+    const res = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=de`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const name = [data.locality || data.city, data.principalSubdivision, data.countryName].filter(Boolean).join(", ");
+    return name || null;
+  } catch { return null; }
+}
+async function loadLocationOverviewByName(name) {
+  try {
+    const location = await resolveLocation(name);
+    await showLocationOverview(location);
+  } catch (err) {
+    alert(`"${name}" konnte nicht geladen werden: ${err.message}`);
+  }
+}
+locateBtn.addEventListener("click", () => {
+  if (!navigator.geolocation) { alert("Standortbestimmung wird von diesem Browser nicht unterstützt."); return; }
+  locateBtn.disabled = true;
+  navigator.geolocation.getCurrentPosition(
+    async (pos) => {
+      try {
+        const { latitude: lat, longitude: lon } = pos.coords;
+        const elevationM = await fetchElevation(lat, lon);
+        const name = (await reverseGeocode(lat, lon)) || `${lat.toFixed(3)}, ${lon.toFixed(3)}`;
+        await showLocationOverview({ name, lat, lon, elevationM });
+      } catch (err) {
+        alert("Standort-Übersicht konnte nicht geladen werden: " + err.message);
+      } finally {
+        locateBtn.disabled = false;
+      }
+    },
+    (err) => { locateBtn.disabled = false; alert("Standort konnte nicht bestimmt werden: " + err.message); },
+    { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
+  );
+});
+
+/* ============================================================
+   GESPEICHERTE ORTE — Favoriten-Chips für schnellen Ortswechsel ohne
+   Tippen; laufen wie der Standort-Finder direkt über die Weather
+   Engine (3-Tage-Überblick), ohne DeepSeek-Umweg.
+   ============================================================ */
 function safeGet(key) { try { return localStorage.getItem(key); } catch { return null; } }
 function safeSet(key, value) { try { localStorage.setItem(key, value); } catch {} }
 function safeRemove(key) { try { localStorage.removeItem(key); } catch {} }
 
+const FAVORITES_STORAGE = "wetteranalyst_favorites";
+const DEFAULT_FAVORITES = ["Rösrath", "Zugspitze"];
+function loadFavorites() {
+  try {
+    const raw = safeGet(FAVORITES_STORAGE);
+    if (!raw) return [...DEFAULT_FAVORITES];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) && arr.length ? arr : [...DEFAULT_FAVORITES];
+  } catch { return [...DEFAULT_FAVORITES]; }
+}
+function saveFavorites(list) { safeSet(FAVORITES_STORAGE, JSON.stringify(list)); }
+let favorites = loadFavorites();
+function renderFavorites() {
+  favRow.innerHTML = "";
+  favorites.forEach((name, idx) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "fav-chip";
+    chip.title = `Wetter für ${name} anzeigen`;
+    chip.appendChild(document.createTextNode(name));
+    const del = document.createElement("span");
+    del.className = "fav-del";
+    del.textContent = "×";
+    del.title = "Entfernen";
+    del.addEventListener("click", (e) => {
+      e.stopPropagation();
+      favorites = favorites.filter((_, i) => i !== idx);
+      saveFavorites(favorites);
+      renderFavorites();
+    });
+    chip.appendChild(del);
+    chip.addEventListener("click", () => loadLocationOverviewByName(name));
+    favRow.appendChild(chip);
+  });
+  const addChip = document.createElement("button");
+  addChip.type = "button";
+  addChip.className = "fav-chip fav-add";
+  addChip.textContent = "+ Ort merken";
+  addChip.addEventListener("click", () => {
+    const name = prompt('Ort merken (Name, z.B. "Köln"):');
+    if (!name || !name.trim()) return;
+    favorites.push(name.trim());
+    saveFavorites(favorites);
+    renderFavorites();
+  });
+  favRow.appendChild(addChip);
+}
+renderFavorites();
+
 let history = [];
 
-function renderMessage(role, text, opts = {}) {
+function renderMessage(role, text) {
   const el = document.createElement("div");
-  el.className = "msg " + role + (opts.example ? " example" : "");
-  if (opts.example) {
-    const tag = document.createElement("span");
-    tag.className = "example-tag";
-    tag.textContent = "Beispiel";
-    el.appendChild(tag);
-  }
+  el.className = "msg " + role;
   el.appendChild(document.createTextNode(text));
   log.appendChild(el);
   log.scrollTop = log.scrollHeight;
   return el;
-}
-
-function renderToolPanel(toolCalls) {
-  if (!toolCalls || toolCalls.length === 0) return;
-  const details = document.createElement("details");
-  details.className = "toolpanel";
-  const summary = document.createElement("summary");
-  summary.textContent = `${toolCalls.length} Werkzeugaufruf${toolCalls.length > 1 ? "e" : ""} (Nerd-Modus)`;
-  const pre = document.createElement("pre");
-  pre.className = "mono";
-  pre.textContent = toolCalls.map((c) => `▸ ${c.name}(${c.arguments})\n${JSON.stringify(c.result, null, 2)}`).join("\n\n");
-  details.appendChild(summary);
-  details.appendChild(pre);
-  log.appendChild(details);
-  log.scrollTop = log.scrollHeight;
 }
 
 function renderInitial() {
@@ -1305,7 +1562,6 @@ composer.addEventListener("submit", async (e) => {
     clearInterval(ticker);
     thinking.remove();
     renderMessage("assistant", result.reply || "(keine Antwort erhalten)");
-    if (nerdToggle.checked) renderToolPanel(result.toolCalls);
     // Übersicht (Dashboard) mit den Rohdaten aus dieser Runde aktualisieren —
     // der Reihe nach, damit bei mehreren Aufrufen der jeweils neueste Stand gewinnt.
     for (const call of result.toolCalls || []) updateOverviewFromToolResult(call.name, call.result);
