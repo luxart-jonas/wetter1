@@ -129,7 +129,7 @@
      Füllt/aktualisiert sich automatisch nach jeder Wetteranalyse;
      Layout bleibt dabei immer gleich (Kacheln + Regenradar-Balken).
      ============================================================ */
-  #overview { flex: none; border-bottom: 1px solid var(--border); background: var(--surface); padding: 0.7rem 1.1rem 0.75rem; overflow-y: auto; }
+  #overview { flex: none; max-height: 42vh; border-bottom: 1px solid var(--border); background: var(--surface); padding: 0.7rem 1.1rem 0.75rem; overflow-y: auto; }
   .ov-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.6rem; margin-bottom: 0.55rem; }
   .ov-head-left { display: flex; align-items: baseline; gap: 0.45rem; min-width: 0; }
   .locate-btn {
@@ -203,9 +203,11 @@
   .day-temp { font-family: "JetBrains Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; font-size: 1.1rem; }
   .day-rain { font-size: 0.7rem; color: var(--muted); display: flex; align-items: center; gap: 0.3rem; }
 
-  .ov-radar { margin-top: 0.65rem; border-top: 1px dashed var(--border); padding-top: 0.55rem; }
+  #radarSection {
+    flex: none; border-top: 1px solid var(--border); background: var(--surface); padding: 0.6rem 1.1rem 0.55rem;
+  }
   .ov-radar-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.35rem; }
-  .radar-map { height: 11rem; border-radius: 10px; overflow: hidden; border: 1px solid var(--border); background: var(--surface-2); }
+  .radar-map { height: 9rem; border-radius: 10px; overflow: hidden; border: 1px solid var(--border); background: var(--surface-2); }
 
   main { flex: 1; overflow-y: auto; padding: 1rem 1rem 0.5rem; display: flex; flex-direction: column; gap: 0.7rem; }
   .msg { max-width: 78%; padding: 0.65rem 0.95rem; border-radius: var(--radius); line-height: 1.5; white-space: pre-wrap; font-size: 0.94rem; }
@@ -315,13 +317,16 @@
     <div class="ov-window-head" id="ovWindowHead"></div>
     <div id="ovWindowScores"></div>
   </div>
-  <div class="ov-radar" id="radarSection" hidden>
-    <div class="ov-radar-head"><span class="ov-rain-title">🗺️ Regenradar-Karte</span></div>
-    <div class="radar-map" id="radarMap"></div>
-  </div>
 </section>
 
 <main id="log"></main>
+
+<!-- Regenradar-Karte bewusst GANZ UNTEN, nach dem Chat-Verlauf, direkt über
+     der Eingabe — nicht Teil der (scrollenden) Übersicht oben. -->
+<section class="ov-radar" id="radarSection" aria-label="Regenradar-Karte" hidden>
+  <div class="ov-radar-head"><span class="ov-rain-title">🗺️ Regenradar-Karte</span></div>
+  <div class="radar-map" id="radarMap"></div>
+</section>
 
 <form id="composer">
   <input id="input" type="text" placeholder="Frag nach dem Wetter…" autocomplete="off" />
@@ -345,7 +350,7 @@
    nach einem Deploy auf einen Blick sieht, ob das Handy schon die
    neue Version geladen hat.
    ============================================================ */
-const APP_VERSION = "1.7.1";
+const APP_VERSION = "1.8.0";
 
 /* ============================================================
    KONFIGURATION — 1:1 aus der ursprünglichen Weather Engine
@@ -1387,12 +1392,30 @@ function renderDayCards(results) {
   });
   ovDays.hidden = false;
 }
+/* Kurze Textzusammenfassung im Chat-Verlauf, zusätzlich zur grafischen
+   Übersicht — rein aus den berechneten Werten zusammengesetzt (kein
+   DeepSeek-Aufruf nötig, deshalb sofort da und ohne API-Kosten). */
+function buildLocationSummaryText(location, results) {
+  const dayLabel = (r, i) => (i === 0 ? "Heute" : i === 1 ? "Morgen" : DAY_NAME_FMT.format(new Date(`${r.date}T12:00:00Z`)));
+  const lines = results.map((r, i) => {
+    const temp = r.consensus?.temperature?.mean != null ? fmtNum(r.consensus.temperature.mean, 0, "°C") : "–";
+    const rainPct = r.rainOutlook?.summary?.maxProbabilityPct;
+    const rainText = typeof rainPct === "number" ? `Regenrisiko bis zu ${rainPct}%` : "Regenrisiko unbekannt";
+    const windText = r.consensus?.windSpeed?.mean != null ? `, Wind ${fmtNum(r.consensus.windSpeed.mean, 0, " km/h")}` : "";
+    return `${dayLabel(r, i)}: ca. ${temp}, ${rainText}${windText}.`;
+  });
+  return `📍 ${location.name} — 3-Tage-Überblick (Mittagswerte):\n${lines.join("\n")}`;
+}
+
 async function showLocationOverview(location) {
   ovLocation.textContent = location.name;
   const results = await run3DayOverview(location);
   updateOverviewFromToolResult("get_weather", results[0]);
   renderDayCards(results);
   ensureRadarMap(location.lat, location.lon);
+  const summaryText = buildLocationSummaryText(location, results);
+  renderMessage("assistant", summaryText);
+  history.push({ role: "assistant", content: summaryText });
 }
 async function reverseGeocode(lat, lon) {
   try {
