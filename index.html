@@ -358,7 +358,7 @@
    nach einem Deploy auf einen Blick sieht, ob das Handy schon die
    neue Version geladen hat.
    ============================================================ */
-const APP_VERSION = "1.9.0";
+const APP_VERSION = "1.11.0";
 
 /* ============================================================
    KONFIGURATION — 1:1 aus der ursprünglichen Weather Engine
@@ -1012,7 +1012,8 @@ Regeln, die du IMMER befolgst:
 8. Du entschuldigst dich nicht präventiv und behauptest nicht, dir sei ein Fehler unterlaufen, wenn tatsächlich keiner passiert ist. Falls du tatsächlich etwas falsch gemacht hast, korrigierst du es schlicht und sachlich, ohne Drama.
 9. Für jede Frage zur Regenwahrscheinlichkeit — auch Kapazitätsfragen wie "hast du einen Regenradar?" oder "gibt es ein Regenradar?" — antwortest du NIEMALS nur mit "nein, das habe ich nicht". Du rufst IMMER get_rain_probability auf und lieferst die stündliche Regenwahrscheinlichkeit als Antwort; dabei erwähnst du kurz und beiläufig, dass es sich um eine berechnete Zeitreihe (Prozent pro Stunde) statt einer Kartengrafik handelt — das ist eine Klarstellung, kein Grund, die eigentliche Frage unbeantwortet zu lassen. "Wann regnet es", "wie hoch ist die Regenwahrscheinlichkeit", "Regenradar" führen also IMMER zu einem Werkzeugaufruf, nie zu einer bloßen Absage.
 10. WICHTIG bei Vergleichen über mehrere Tage (z.B. "welcher Tag ist am schlechtesten diese Woche"): rufe für JEDEN Tag ein eigenes, frisches Werkzeug auf — verlasse dich nie auf Zahlen aus einer früheren Antwort in diesem Gespräch, auch nicht aus deiner eigenen vorherigen Nachricht. Jede Zahl, die du nennst, muss wortwörtlich aus dem Tool-Ergebnis DIESER Runde stammen. Wenn du eine Zahl nicht in einem aktuellen Tool-Ergebnis wiederfindest, nenne sie nicht — rufe stattdessen das Werkzeug erneut auf. Widersprich dir nie selbst zwischen zwei Antworten zum selben Ort/Tag, ohne den Widerspruch zu erklären (z.B. unterschiedliche Uhrzeit am selben Tag).
-11. JEDE Wetteranalyse (get_weather, get_hourly_weather, get_weather_details, compare_models, get_mountain_weather, get_visibility, get_model_consensus, find_best_weather_window) liefert automatisch ein Feld "rainOutlook" mit — eine Regenwahrscheinlichkeits-Übersicht für den ganzen Tag, du musst dafür NICHT extra get_rain_probability aufrufen. Baue rainOutlook IMMER kurz mit in deine Antwort ein, auch wenn nicht explizit nach Regen gefragt wurde — ein bis zwei Sätze reichen. Nutze rainOutlook.isShortTerm, um die Detailtiefe zu wählen: ist isShortTerm true (Vorhersage beginnt innerhalb der nächsten ~48h), nenne den stündlichen Verlauf konkret (z.B. "ab 15 Uhr steigt das Risiko auf 70%, gegen 19 Uhr wieder trocken") anhand von rainOutlook.hourly. Ist isShortTerm false (weiter in der Zukunft), fasse nur knapp zusammen (rainOutlook.summary: höchste Wahrscheinlichkeit, ungefährer Zeitraum) statt jede Stunde aufzuzählen — bei größerer Entfernung ist stündliche Genauigkeit ohnehin nicht sinnvoll. Ist rainOutlook.hourly leer, erwähne kurz, dass dafür keine Daten verfügbar waren, statt es zu verschweigen. get_rain_probability bleibt nutzbar, wenn der Nutzer GEZIELT nur die Regenwahrscheinlichkeit im Detail sehen will, ohne die übrige Wetteranalyse.`;
+11. JEDE Wetteranalyse (get_weather, get_hourly_weather, get_weather_details, compare_models, get_mountain_weather, get_visibility, get_model_consensus, find_best_weather_window) liefert automatisch ein Feld "rainOutlook" mit — eine Regenwahrscheinlichkeits-Übersicht für den ganzen Tag, du musst dafür NICHT extra get_rain_probability aufrufen. Baue rainOutlook IMMER kurz mit in deine Antwort ein, auch wenn nicht explizit nach Regen gefragt wurde — ein bis zwei Sätze reichen. Nutze rainOutlook.isShortTerm, um die Detailtiefe zu wählen: ist isShortTerm true (Vorhersage beginnt innerhalb der nächsten ~48h), nenne den stündlichen Verlauf konkret (z.B. "ab 15 Uhr steigt das Risiko auf 70%, gegen 19 Uhr wieder trocken") anhand von rainOutlook.hourly. Ist isShortTerm false (weiter in der Zukunft), fasse nur knapp zusammen (rainOutlook.summary: höchste Wahrscheinlichkeit, ungefährer Zeitraum) statt jede Stunde aufzuzählen — bei größerer Entfernung ist stündliche Genauigkeit ohnehin nicht sinnvoll. Ist rainOutlook.hourly leer, erwähne kurz, dass dafür keine Daten verfügbar waren, statt es zu verschweigen. get_rain_probability bleibt nutzbar, wenn der Nutzer GEZIELT nur die Regenwahrscheinlichkeit im Detail sehen will, ohne die übrige Wetteranalyse.
+12. ORT OHNE JEDEN ZEITBEZUG (kein Datum, kein "heute"/"morgen"/Wochentag, keine Uhrzeit, kein Zeitfenster — der Nutzer nennt im Grunde nur einen Ort, z.B. "Blatten Schweiz", "und wie siehts in Köln aus", "Wetter Zugspitze"): Das behandelst du IMMER wie einen 3-Tage-Überblick, genau wie der Standort-Knopf in der App — nicht wie eine einzelne Mittags-Abfrage. Rufe für heute, morgen und übermorgen je einen eigenen, frischen Werkzeugaufruf auf (Regel 10 gilt entsprechend: keine Zahl aus einer früheren Antwort wiederverwenden), vergleiche dabei kurz die Modelle (ICON, ECMWF, GFS) untereinander (compare_models oder die Modell-Angaben aus den einzelnen Aufrufen), und fasse GANZ AM ENDE deiner Antwort noch einmal knapp den 3-Tage-Überblick zusammen. Sobald der Nutzer dagegen selbst einen Zeitbezug nennt — ein Datum, "heute"/"morgen"/"übermorgen", einen Wochentag, "in 3 Tagen", eine Uhrzeit oder ein Zeitfenster — bleibt es bei der normalen Einzelabfrage für genau diesen Zeitpunkt/-raum, kein automatischer 3-Tage-Überblick.`;
 }
 
 /* ============================================================
@@ -1404,30 +1405,20 @@ function renderDayCards(results) {
   });
   ovDays.hidden = false;
 }
-/* Kurze Textzusammenfassung im Chat-Verlauf, zusätzlich zur grafischen
-   Übersicht — rein aus den berechneten Werten zusammengesetzt (kein
-   DeepSeek-Aufruf nötig, deshalb sofort da und ohne API-Kosten). */
-function buildLocationSummaryText(location, results) {
-  const dayLabel = (r, i) => (i === 0 ? "Heute" : i === 1 ? "Morgen" : DAY_NAME_FMT.format(new Date(`${r.date}T12:00:00Z`)));
-  const lines = results.map((r, i) => {
-    const temp = r.consensus?.temperature?.mean != null ? fmtNum(r.consensus.temperature.mean, 0, "°C") : "–";
-    const rainPct = r.rainOutlook?.summary?.maxProbabilityPct;
-    const rainText = typeof rainPct === "number" ? `Regenrisiko bis zu ${rainPct}%` : "Regenrisiko unbekannt";
-    const windText = r.consensus?.windSpeed?.mean != null ? `, Wind ${fmtNum(r.consensus.windSpeed.mean, 0, " km/h")}` : "";
-    return `${dayLabel(r, i)}: ca. ${temp}, ${rainText}${windText}.`;
-  });
-  return `📍 ${location.name} — 3-Tage-Überblick (Mittagswerte):\n${lines.join("\n")}`;
-}
-
 async function showLocationOverview(location) {
   ovLocation.textContent = location.name;
+  // Kacheln/3-Tage-Kärtchen/Karte SOFORT aus der Weather Engine befüllen —
+  // die Zahlen selbst kommen unverändert von dort, kein Warten auf DeepSeek nötig.
   const results = await run3DayOverview(location);
   updateOverviewFromToolResult("get_weather", results[0]);
   renderDayCards(results);
   ensureRadarMap(location.lat, location.lon);
-  const summaryText = buildLocationSummaryText(location, results);
-  renderMessage("assistant", summaryText);
-  history.push({ role: "assistant", content: summaryText });
+  // Den ausführlichen TEXT dazu liefert DeepSeek wie bei einer normal
+  // getippten Frage (gleiche Chat-Pipeline) — mit Modellvergleich und dem
+  // 3-Tage-Überblick am Ende, statt einer knappen eigenen Zusammenfassung.
+  await sendChatMessage(
+    `Wie wird das Wetter in ${location.name} heute, morgen und übermorgen? Vergleiche dabei kurz die Wettermodelle (ICON, ECMWF, GFS) untereinander und fasse ganz am Ende noch einmal knapp den 3-Tage-Überblick zusammen.`
+  );
 }
 async function reverseGeocode(lat, lon) {
   try {
@@ -1562,16 +1553,17 @@ resetKeyBtn.addEventListener("click", () => {
   }
 });
 
-composer.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const message = input.value.trim();
-  if (!message) return;
+/* Gemeinsame Sende-Logik — genutzt sowohl vom Eingabefeld als auch vom
+   Standort-Finder/den Orts-Chips (dort mit einer selbst formulierten Frage
+   statt Nutzer-Eingabe), damit beide denselben ausführlichen DeepSeek-Text
+   (inkl. Modellvergleich) liefern statt einer eigenen, knappen Zusammenfassung. */
+async function sendChatMessage(message) {
+  if (input.disabled) return; // schon eine Anfrage in Bearbeitung
   const apiKey = safeGet(KEY_STORAGE);
   if (!apiKey) { openGate(); return; }
 
   renderMessage("user", message);
   history.push({ role: "user", content: message });
-  input.value = "";
   input.disabled = true;
   sendBtn.disabled = true;
 
@@ -1612,8 +1604,16 @@ composer.addEventListener("submit", async (e) => {
   } finally {
     input.disabled = false;
     sendBtn.disabled = false;
-    input.focus();
   }
+}
+
+composer.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const message = input.value.trim();
+  if (!message) return;
+  input.value = "";
+  await sendChatMessage(message);
+  input.focus();
 });
 
 // Start
