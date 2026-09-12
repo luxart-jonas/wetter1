@@ -307,10 +307,6 @@
     <div class="rain-bars" id="rainBars"></div>
     <div class="rain-axis" id="rainAxis"></div>
   </div>
-  <div class="ov-radar" id="radarSection" hidden>
-    <div class="ov-radar-head"><span class="ov-rain-title">🗺️ Regenradar-Karte</span></div>
-    <div class="radar-map" id="radarMap"></div>
-  </div>
   <div class="ov-days" id="ovDays" hidden>
     <div class="ov-days-head">📅 3-Tage-Überblick</div>
     <div class="day-cards" id="dayCards"></div>
@@ -318,6 +314,10 @@
   <div class="ov-window" id="ovWindow" hidden>
     <div class="ov-window-head" id="ovWindowHead"></div>
     <div id="ovWindowScores"></div>
+  </div>
+  <div class="ov-radar" id="radarSection" hidden>
+    <div class="ov-radar-head"><span class="ov-rain-title">🗺️ Regenradar-Karte</span></div>
+    <div class="radar-map" id="radarMap"></div>
   </div>
 </section>
 
@@ -345,7 +345,7 @@
    nach einem Deploy auf einen Blick sieht, ob das Handy schon die
    neue Version geladen hat.
    ============================================================ */
-const APP_VERSION = "1.7.0";
+const APP_VERSION = "1.7.1";
 
 /* ============================================================
    KONFIGURATION — 1:1 aus der ursprünglichen Weather Engine
